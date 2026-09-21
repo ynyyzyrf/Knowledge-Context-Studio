@@ -299,6 +299,7 @@ class MemoryCandidate(Base):
             ],
         ),
         UniqueConstraint("job_id", "ordinal"),
+        UniqueConstraint("tenant_id", "agent_id", "subject_id", "id"),
         CheckConstraint("status in ('candidate','approved','rejected')", name="candidate_status"),
     )
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=identifier)
@@ -310,4 +311,98 @@ class MemoryCandidate(Base):
     content: Mapped[str] = mapped_column(String(4000))
     source_message_ids: Mapped[list] = mapped_column(JSON)
     status: Mapped[str] = mapped_column(String(16), default="candidate")
+    version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    created_at: Mapped[float] = mapped_column(Float, default=time.time)
+
+
+class MemoryRecord(Base):
+    __tablename__ = "memory_records"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "agent_id", "subject_id", "candidate_id"],
+            [
+                "memory_candidates.tenant_id",
+                "memory_candidates.agent_id",
+                "memory_candidates.subject_id",
+                "memory_candidates.id",
+            ],
+        ),
+        UniqueConstraint("tenant_id", "agent_id", "subject_id", "id"),
+        CheckConstraint("status in ('pending','active','disabled','deleted')", name="memory_status"),
+    )
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=identifier)
+    tenant_id: Mapped[str] = mapped_column(String(32), index=True)
+    agent_id: Mapped[str] = mapped_column(String(32), index=True)
+    subject_id: Mapped[str] = mapped_column(String(32))
+    candidate_id: Mapped[str] = mapped_column(String(32), unique=True)
+    current_version: Mapped[int] = mapped_column(Integer, default=1)
+    status: Mapped[str] = mapped_column(String(16), default="pending")
+    created_at: Mapped[float] = mapped_column(Float, default=time.time)
+    updated_at: Mapped[float] = mapped_column(Float, default=time.time)
+
+
+class MemoryRevision(Base):
+    __tablename__ = "memory_revisions"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "agent_id", "subject_id", "memory_id"],
+            [
+                "memory_records.tenant_id",
+                "memory_records.agent_id",
+                "memory_records.subject_id",
+                "memory_records.id",
+            ],
+        ),
+        UniqueConstraint("tenant_id", "agent_id", "subject_id", "memory_id", "version"),
+        CheckConstraint(
+            "status in ('pending','active','superseded','disabled','deleted')", name="memory_revision_status"
+        ),
+    )
+    memory_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    version: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String(32), index=True)
+    agent_id: Mapped[str] = mapped_column(String(32))
+    subject_id: Mapped[str] = mapped_column(String(32))
+    content: Mapped[str | None] = mapped_column(String(4000), nullable=True)
+    source_message_ids: Mapped[list] = mapped_column(JSON)
+    status: Mapped[str] = mapped_column(String(16))
+    reason: Mapped[str] = mapped_column(String(1000))
+    actor_id: Mapped[str] = mapped_column(String(32))
+    created_at: Mapped[float] = mapped_column(Float, default=time.time)
+
+
+class MemoryProjection(Base):
+    __tablename__ = "memory_projections"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "agent_id", "subject_id", "memory_id", "version"],
+            [
+                "memory_revisions.tenant_id",
+                "memory_revisions.agent_id",
+                "memory_revisions.subject_id",
+                "memory_revisions.memory_id",
+                "memory_revisions.version",
+            ],
+        ),
+        UniqueConstraint("memory_id", "version"),
+        CheckConstraint("kind in ('upsert','delete')", name="memory_projection_kind"),
+        CheckConstraint(
+            "state in ('pending','running','retry','succeeded','failed','obsolete')",
+            name="memory_projection_state",
+        ),
+    )
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=identifier)
+    tenant_id: Mapped[str] = mapped_column(String(32), index=True)
+    agent_id: Mapped[str] = mapped_column(String(32))
+    subject_id: Mapped[str] = mapped_column(String(32))
+    memory_id: Mapped[str] = mapped_column(String(32), index=True)
+    version: Mapped[int] = mapped_column(Integer)
+    kind: Mapped[str] = mapped_column(String(16))
+    state: Mapped[str] = mapped_column(String(16), default="pending", index=True)
+    attempt: Mapped[int] = mapped_column(Integer, default=0)
+    available_at: Mapped[float] = mapped_column(Float, default=time.time)
+    lease_token: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    lease_until: Mapped[float | None] = mapped_column(Float, nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    request_id: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[float] = mapped_column(Float, default=time.time)

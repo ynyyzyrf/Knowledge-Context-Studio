@@ -1,6 +1,35 @@
 # Knowledge Context Studio
 
-內部團隊 V1.0，正在開發。帳號、Agent、空間授權及會話 API 已實作；完整 UI、工作任務、引擎接入及正式驗收尚未完成。
+內部團隊 V1.0，正在開發。管理前端已對接帳號、外部 Agent、空間授權、會話提取任務和記憶治理 API。Agent 在外部運行；平台不內置 Agent 執行器。文件匯入、引擎發布、檢索與正式生產驗收尚未完成。
+
+## 啟動工作台
+
+完成下方首次設定後，在此目錄執行：
+
+```powershell
+./scripts/start.ps1
+# 程式更新後重新建置並重啟 API、worker
+./scripts/start.ps1 -Restart
+```
+
+開啟 [管理工作台](http://localhost:8088/)，接口文件保留於 [Swagger](http://localhost:8088/docs)。腳本安裝鎖定依賴、建置前端、啟動資料庫、執行遷移並在背景啟動 API 和提取 worker；只綁定本機。日誌在 `runtime/`。`-SkipBuild` 僅在前端產物已更新時使用。這是本機啟動方式，尚未提供生產程序監督與災難恢復部署。
+
+本機已建立的管理員帳號是 `admin@studio.local`；首次密碼保存在受限本機檔案 `runtime/initial-admin.txt`，不納入版本控制。新環境請使用下方 bootstrap 指令自行指定管理員，啟動脚本不會覆寫既有帳號。
+
+工作台提供空間與授權、外部 Agent 與服務對象、有限範圍憑證、團隊成員、任務中心、記憶候選審核／來源／版本及操作紀錄。管理功能只對團隊管理員顯示。API 接入測試使用產品 Agent 憑證，手動建立會話、錄入外部訊息並提交真實模型提取；不產生 Agent 回答。憑證只保留於前端記憶體，刷新、切換團隊或登出後需重新接入。
+
+審核後顯示「待發布」；引擎發布尚未接通，不能當作已可檢索。任務失敗會顯示錯誤與追蹤編號，需明確重試。
+
+## 前端開發
+
+```powershell
+cd web
+npm ci
+npm test
+npm run build
+```
+
+若使用 Vite 開發伺服器，先在啟動後端的終端設定 `$env:KCS_PUBLIC_ORIGIN='http://localhost:5173'`，再從 `web/` 執行 `npm run dev`。`/v1` 由 Vite 代理至 8088。回到同源建置模式時，移除此環境變數並重啟後端，恢復預設 `http://localhost:8088`。不得放寬 Origin 校驗來繞過開發設定。
 
 ## 本機設定
 

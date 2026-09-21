@@ -34,6 +34,7 @@ def job_payload(row):
             "updated_at",
             "input_tokens",
             "output_tokens",
+            "request_id",
         )
     }
 

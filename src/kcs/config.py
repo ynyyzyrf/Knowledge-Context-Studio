@@ -1,3 +1,4 @@
+from pathlib import Path
 from urllib.parse import urlsplit
 
 from pydantic import Field, SecretStr, model_validator
@@ -11,6 +12,7 @@ class Settings(BaseSettings):
     public_origin: str = "http://localhost:8088"
     secure_cookies: bool = False
     session_hours: int = 12
+    frontend_dist: Path = Path(__file__).resolve().parents[2] / "web" / "dist"
     model_base_url: str = ""
     model_http_allowed_origin: str = ""
     model_api_key: SecretStr = SecretStr("")

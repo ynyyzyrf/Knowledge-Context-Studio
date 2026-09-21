@@ -186,6 +186,15 @@ def credentials(
                 "created_at": row.created_at,
                 "expires_at": row.expires_at,
                 "revoked_at": row.revoked_at,
+                "subject_ids": list(
+                    db.scalars(
+                        select(CredentialSubject.subject_id).where(
+                            CredentialSubject.tenant_id == tenant_id,
+                            CredentialSubject.agent_id == agent_id,
+                            CredentialSubject.credential_id == row.id,
+                        )
+                    )
+                ),
             }
             for row in rows
         ]

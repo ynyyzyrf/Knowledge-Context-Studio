@@ -9,6 +9,7 @@ __pycache__/
 runtime/
 node_modules/
 web/dist/
+*.tsbuildinfo
 *.egg-info/
 coverage.xml
 .coverage

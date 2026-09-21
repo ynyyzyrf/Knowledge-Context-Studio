@@ -1,7 +1,8 @@
 import uuid
 
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
@@ -10,6 +11,7 @@ from .auth_routes import router
 from .config import Settings
 from .database import Database
 from .job_routes import router as job_router
+from .memory_routes import router as memory_router
 from .session_routes import router as session_router
 from .space_routes import router as space_router
 
@@ -54,4 +56,17 @@ def create_app(settings: Settings | None = None):
     app.include_router(space_router)
     app.include_router(session_router)
     app.include_router(job_router)
+    app.include_router(memory_router)
+    if (settings.frontend_dist / "assets").is_dir():
+        app.mount("/assets", StaticFiles(directory=settings.frontend_dist / "assets"), name="assets")
+
+    @app.get("/{path:path}", include_in_schema=False)
+    def frontend(path: str):
+        if path.split("/")[0] in ("v1", "health", "assets", "docs", "redoc", "openapi.json"):
+            raise HTTPException(404, "找不到接口")
+        index = settings.frontend_dist / "index.html"
+        if not index.is_file():
+            raise HTTPException(503, "前端尚未建置")
+        return FileResponse(index)
+
     return app
