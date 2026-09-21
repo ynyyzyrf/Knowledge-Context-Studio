@@ -1,0 +1,51 @@
+# V1.0 implementation ledger and plan
+
+Objective: complete the internal-team V1.0 and start the project. Scope remains R01–R12 and N01–N09 in ../docs/production (workspace root), not a demo.
+
+## Rulings
+
+- User now explicitly authorizes V1 development and startup. Earlier G0-only execution limit is superseded; unresolved gates remain acceptance work, not reasons to avoid implementing the product.
+- New isolated product repository at studio/, branch v1. OpenViking and loci stay read-only. Local startup is the first deployment; no public publication inferred.
+- Product API: FastAPI + SQLAlchemy/PostgreSQL, persistent worker operations. React/TypeScript UI. OpenViking stays an internal HTTP service pinned to validated source.
+- Internal first release uses administrator-provisioned password accounts with argon2-cffi hashing and revocable server-side sessions; no public signup. OIDC remains optional integration, not a fabricated existing IdP.
+- User selected existing OpenAI-compatible provider. Endpoint/model/key must be configured locally; missing provider blocks live acceptance but not implementation. No fake provider in shipped runtime.
+- Candidate extraction goes to product staging, outside the engine retrieval corpus. Activate through a durable operation; no user-wide memory publication for Subject facts. Context adapter uses scope-restricted retrieval and checks product source/permission state before delivery.
+- Authoritative policy/deletion ledger must survive engine restore. Recovery remains quarantined until replay + positive/negative checks complete.
+
+## Work packages (test first, then implement, verify, update evidence)
+
+- [ ] P1: configuration, schema migration, admin bootstrap, password sessions, CSRF, membership, audit; tests invalid/revoked credentials, disabled member and tenant boundary.
+- [x] P2: Agent, Subject and space grants; one-time credentials, rotations, disable and scoped access; composite tenant FK and negative authorization tests. Product-policy APIs verified; engine ACL projection remains P3 and whole-branch review remains P7.
+- [ ] P3: durable operations/worker, OpenViking adapter, versioned file ingestion, deletion/tombstones, retry/lease/idempotency; real native integration and worker interruption.
+- [ ] P4: context scope intersections, session/message bindings, extraction candidate staging, activate/edit/disable and provenance; tests cross Subject/space/candidate leakage and in-flight revocation.
+- [ ] P5: full Chinese product UI (login, spaces/files, Agents/subjects, operations, cognition, audit/settings), source-backed state and browser verification.
+- [ ] P6: configuration for actual models, quotas/usage, backups/recovery quarantine + replay, migrations/runbooks, health/metrics; end-to-end internal Agent workflow, load and restore evidence.
+- [ ] P7: final independent review, fix findings, launch via documented command, verify browser and complete acceptance matrix. Do not mark goal complete while any explicit requirement remains unverified.
+
+## Technical references consulted
+
+- https://docs.sqlalchemy.org/en/20/orm/session_basics.html : transaction/session lifecycle.
+- https://argon2-cffi.readthedocs.io/en/stable/howto.html : password hashing and verification.
+
+## Current evidence
+
+2026-09-21: independent product repository initialized. PostgreSQL 16 container is healthy on loopback 55488; migration b954958cfe04 applied to product database. Application/UI are not yet launched.
+
+- Seven PostgreSQL-backed auth tests pass against isolated schemas initialized through Alembic: login/logout/CSRF, wrong password and Origin, tenant membership and revocation, last admin retention, lockout/expiry, existing account membership, concurrent mutual admin disable.
+- Six model adapter contract tests pass using explicit HTTP fixtures: configuration/secret redaction, chat+embedding parsing, auth/rate-limit/unavailable errors, invalid embedding response. These are not real provider acceptance.
+- Earlier identity/model suite: 13 passed, later 15 after HTTP opt-in and independent chat checks. These historical counts do not represent the current full suite. Existing native G0 evidence stays in workspace validation/.
+- User-supplied provider stored only in ignored local configuration. `/v1/models` returned 200 with metis-coder, metis-coder-auto, metis-coder-max. Real metis-coder chat passed (17 input / 3 output tokens); metis-coder-auto returned 429. Default is metis-coder; no silent fallback. Vector model is still unspecified and live embedding acceptance remains open.
+- Added exact-origin opt-in for the explicitly supplied remote HTTP endpoint; other origins/ports retain HTTPS requirement. Chat works independently of missing embeddings; embedding calls fail explicitly with embedding_not_configured.
+- `python -m kcs.manage check-chat` verifies real chat; `check-models` requires both chat and embeddings. No provider key or response body is recorded in evidence.
+- P1 remains open for broader operational hardening/review; P3–P7 remain incomplete. No claim of production completion or full project startup.
+
+### Product policy and session package
+
+- Migrations `4bbdda4f45e5` and `9558aa10ae69` applied on local PostgreSQL. Agent/credential/Subject/space grants and session/message references use tenant-qualified compound foreign keys. Alembic check reports no schema drift.
+- API supports Agent/Subject creation and disable/enable, explicit finite credential Subject scope, one-time token issuance, expiry, revoke and atomic rotation. Only token hashes are stored. Lists and audit omit raw tokens. Forged identity headers cannot change bearer identity.
+- Space creation defaults to pending engine synchronization. Product grants are authoritative; ordinary people require explicit space grants. No ingestion/context code currently publishes pending spaces.
+- Session creation binds Agent and Subject; there is no public rebinding route. Per-Agent creation keys and per-session message IDs deduplicate retries, with content/Subject conflicts rejected. Message and session lists require current credential Subject authorization.
+- Ruling: serialize short session requests on tenant policy row, then refresh identity before access — prevents policy mutations racing accepted session writes and supports duplicate event serialization — cost is per-tenant throughput, to measure before N04 acceptance. No model or engine calls run under this lock.
+- PostgreSQL tests cover concurrent mutual admin disable, concurrent credential rotation, duplicate concurrent message delivery, explicit revocation, credential expiry, Subject disable, cross-Agent session access and direct cross-tenant/cross-Agent FK violations.
+- Full PostgreSQL suite: 27 passed, two dependency deprecation warnings. Ruff lint passes; source/tests/migrations formatted. This is local API/database evidence, not browser, worker, real Agent or production acceptance.
+- Next implementation: durable jobs and extraction staging, private OpenViking runtime adapter/ingestion, then UI and operations. Real chat is available; embedding model remains awaiting user selection.
