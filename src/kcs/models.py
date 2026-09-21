@@ -212,3 +212,102 @@ class ConversationMessage(Base):
     role: Mapped[str] = mapped_column(String(16))
     content: Mapped[str] = mapped_column(String(32000))
     created_at: Mapped[float] = mapped_column(Float, default=time.time)
+
+
+class BackgroundJob(Base):
+    __tablename__ = "background_jobs"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "agent_id", "subject_id", "session_id"],
+            [
+                "conversations.tenant_id",
+                "conversations.agent_id",
+                "conversations.subject_id",
+                "conversations.id",
+            ],
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "agent_id", "credential_id"],
+            ["agent_credentials.tenant_id", "agent_credentials.agent_id", "agent_credentials.id"],
+        ),
+        UniqueConstraint("session_id", "through_sequence", "kind"),
+        UniqueConstraint("tenant_id", "agent_id", "subject_id", "id"),
+        CheckConstraint("state in ('pending','running','retry','succeeded','failed')", name="job_state"),
+    )
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=identifier)
+    tenant_id: Mapped[str] = mapped_column(String(32), index=True)
+    agent_id: Mapped[str] = mapped_column(String(32), index=True)
+    subject_id: Mapped[str] = mapped_column(String(32))
+    session_id: Mapped[str] = mapped_column(String(32))
+    credential_id: Mapped[str] = mapped_column(String(32))
+    kind: Mapped[str] = mapped_column(String(32), default="extract")
+    through_sequence: Mapped[int] = mapped_column(Integer)
+    state: Mapped[str] = mapped_column(String(16), default="pending", index=True)
+    attempt: Mapped[int] = mapped_column(Integer, default=0)
+    max_attempts: Mapped[int] = mapped_column(Integer, default=3)
+    available_at: Mapped[float] = mapped_column(Float, default=time.time)
+    lease_token: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    lease_until: Mapped[float | None] = mapped_column(Float, nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    request_id: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[float] = mapped_column(Float, default=time.time)
+    updated_at: Mapped[float] = mapped_column(Float, default=time.time)
+    input_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
+class CommitReceipt(Base):
+    __tablename__ = "commit_receipts"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "agent_id", "subject_id", "job_id"],
+            [
+                "background_jobs.tenant_id",
+                "background_jobs.agent_id",
+                "background_jobs.subject_id",
+                "background_jobs.id",
+            ],
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "agent_id", "subject_id", "session_id"],
+            [
+                "conversations.tenant_id",
+                "conversations.agent_id",
+                "conversations.subject_id",
+                "conversations.id",
+            ],
+        ),
+    )
+    tenant_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    agent_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    subject_id: Mapped[str] = mapped_column(String(32))
+    session_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    idempotency_key: Mapped[str] = mapped_column(String(128), primary_key=True)
+    job_id: Mapped[str] = mapped_column(String(32))
+
+
+class MemoryCandidate(Base):
+    __tablename__ = "memory_candidates"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "agent_id", "subject_id", "job_id"],
+            [
+                "background_jobs.tenant_id",
+                "background_jobs.agent_id",
+                "background_jobs.subject_id",
+                "background_jobs.id",
+            ],
+        ),
+        UniqueConstraint("job_id", "ordinal"),
+        CheckConstraint("status in ('candidate','approved','rejected')", name="candidate_status"),
+    )
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=identifier)
+    tenant_id: Mapped[str] = mapped_column(String(32), index=True)
+    agent_id: Mapped[str] = mapped_column(String(32))
+    subject_id: Mapped[str] = mapped_column(String(32))
+    job_id: Mapped[str] = mapped_column(String(32))
+    ordinal: Mapped[int] = mapped_column(Integer)
+    content: Mapped[str] = mapped_column(String(4000))
+    source_message_ids: Mapped[list] = mapped_column(JSON)
+    status: Mapped[str] = mapped_column(String(16), default="candidate")
+    created_at: Mapped[float] = mapped_column(Float, default=time.time)

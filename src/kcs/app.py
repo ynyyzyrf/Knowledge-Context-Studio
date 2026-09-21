@@ -9,6 +9,7 @@ from .agent_routes import router as agent_router
 from .auth_routes import router
 from .config import Settings
 from .database import Database
+from .job_routes import router as job_router
 from .session_routes import router as session_router
 from .space_routes import router as space_router
 
@@ -52,4 +53,5 @@ def create_app(settings: Settings | None = None):
     app.include_router(agent_router)
     app.include_router(space_router)
     app.include_router(session_router)
+    app.include_router(job_router)
     return app

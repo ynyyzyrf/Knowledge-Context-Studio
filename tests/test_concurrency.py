@@ -8,6 +8,27 @@ from sqlalchemy import func, select
 from kcs.models import Membership
 
 
+def test_two_workers_cannot_claim_same_job(app):
+    if app.state.database.engine.dialect.name != "postgresql":
+        pytest.skip("Requires PostgreSQL SKIP LOCKED")
+    from test_jobs import submitted
+
+    from kcs.jobs import claim
+
+    with TestClient(app) as admin, TestClient(app) as machine:
+        _, _, _, _, _, job = submitted(admin, machine)
+        barrier = Barrier(2)
+
+        def take():
+            barrier.wait(timeout=10)
+            return claim(app.state.database)
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            a, b = pool.submit(take), pool.submit(take)
+            claimed = [lease for lease in (a.result(timeout=20), b.result(timeout=20)) if lease is not None]
+        assert len(claimed) == 1 and claimed[0].id == job["id"]
+
+
 def test_duplicate_concurrent_messages_have_one_stored_row(app):
     if app.state.database.engine.dialect.name != "postgresql":
         pytest.skip("Requires PostgreSQL row locks")

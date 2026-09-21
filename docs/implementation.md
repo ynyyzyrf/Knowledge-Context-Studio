@@ -49,3 +49,13 @@ Objective: complete the internal-team V1.0 and start the project. Scope remains 
 - PostgreSQL tests cover concurrent mutual admin disable, concurrent credential rotation, duplicate concurrent message delivery, explicit revocation, credential expiry, Subject disable, cross-Agent session access and direct cross-tenant/cross-Agent FK violations.
 - Full PostgreSQL suite: 27 passed, two dependency deprecation warnings. Ruff lint passes; source/tests/migrations formatted. This is local API/database evidence, not browser, worker, real Agent or production acceptance.
 - Next implementation: durable jobs and extraction staging, private OpenViking runtime adapter/ingestion, then UI and operations. Real chat is available; embedding model remains awaiting user selection.
+
+### Durable extraction package
+
+- Migration `7bfd5a3d5fb8` adds jobs, submission receipts and a separate candidate staging table. A submitted session snapshot is deduplicated across multiple receipt keys; later messages do not mutate an earlier submission.
+- PostgreSQL SKIP LOCKED claims, finite leases, replacement tokens and completion fencing prevent two workers accepting the same job result. Abandoned leases reach failed after bounded attempts. Transient model errors use delayed retry; explicit retry retains cumulative attempt counts.
+- Worker loads source messages in a short authorized transaction, releases database locks during the model call, then rechecks lease and current credential/Agent/Subject authorization before atomically staging candidates and succeeding. Staged output has validated source IDs from the snapshot. No engine publication path exists yet.
+- Ruling: unfinished jobs remain bound to the submitting credential, including expiry/revocation — fail closed after loss of authority — rotation may require an explicit retry from a replacement credential with the same Subject authorization.
+- Full default PostgreSQL suite: 38 passed, 1 skipped (opt-in real model test), two dependency deprecation warnings, 32.63 seconds. JUnit: `docs/evidence/jobs-suite.xml`. Includes parallel claim, stale result rejection, post-claim process exit, retry exhaustion, in-flight Subject revocation, and job cross-Agent/Subject visibility.
+- Real model worker evidence: first extraction timed out and was correctly recorded retry; second independent run passed, with a candidate and exact source attribution. Details: `docs/evidence/extraction-live.md`. Does not establish model availability SLO or extraction quality.
+- Ruff lint and Alembic schema check pass. P3 is still incomplete until actual engine adapter/ingestion, deletion and engine-facing recovery work is complete; P4 still needs candidate governance, active memory versions and context.

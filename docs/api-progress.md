@@ -15,6 +15,9 @@
 | `/v1/agent/me` | 憑證身份及當前 Subject／空間授權 | Agent |
 | `/v1/sessions` | 建立與列出有權查看的會話 | Agent＋憑證 Subject 範圍 |
 | `/v1/sessions/{session}/messages` | 加入訊息、按序讀取 | 原會話 Agent＋當前 Subject 授權 |
+| `/v1/sessions/{session}/commit` | 提交持久化提取任務，返回 202 | 原會話 Agent＋當前 Subject 授權 |
+| `/v1/jobs/{job}`、`/{job}/retry` | 任務狀態與明確重試 | 任務 Agent＋當前 Subject 授權 |
+| `/v1/tenants/{tenant}/jobs` | 分頁查看租戶任務 | 租戶管理員 |
 | `/v1/tenants/{tenant}/audit` | 近期操作稽核，不含訊息正文／憑證 | 租戶管理員 |
 
 憑證輪替沿用原到期日與服務對象範圍，同一交易撤銷舊憑證。停用 Agent 或租戶會拒絕其憑證；停用 Subject 會立即移出其有效授權。

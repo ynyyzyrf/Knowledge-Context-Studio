@@ -43,6 +43,20 @@ uv run pytest --postgres -q
 uv run alembic check
 ```
 
+背景提取 worker：
+
+```powershell
+uv run python -m kcs.worker
+# 處理至多一個當前可執行任務後退出
+uv run python -m kcs.worker --once
+```
+
+Agent 透過 `POST /v1/sessions/{id}/commit` 提交 `{ "idempotency_key": "..." }`，返回 202 和任務資料。`GET /v1/jobs/{id}` 查詢實際結果；worker 程序正常退出不等於任務成功。任務使用 pending/running/retry/succeeded/failed 狀態，暫時模型錯誤最多自動嘗試三次，失敗可透過 `/v1/jobs/{id}/retry` 明確重試。
+
+目前每次提取最多 1,000 則訊息且合計 100,000 字元，超限明確失敗；不會悄悄截斷。結果只保存為待審候選，尚未發布到檢索。憑證撤銷、過期或 Subject 停用會阻止尚未完成的任務保存結果；輪替後可用新憑證明確重試。
+
+真實模型測試需明確加入 `--live-model`，預設測試不發出模型請求；實際呼叫可能產生費用。
+
 PostgreSQL 測試只使用 `kcs_test` 資料庫，結束後清理本次產生的 schema，不清空產品資料庫。
 
 完整工作範圍和進度見 [implementation.md](docs/implementation.md)。

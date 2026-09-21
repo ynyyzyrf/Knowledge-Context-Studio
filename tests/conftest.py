@@ -12,6 +12,7 @@ from kcs.config import Settings
 
 
 def pytest_addoption(parser):
+    parser.addoption("--live-model", action="store_true", help="Explicitly enable billed real-model tests")
     parser.addoption(
         "--postgres", action="store_true", help="Run against isolated migrated PostgreSQL schemas"
     )
