@@ -64,8 +64,9 @@ export function SpaceStudio({ spaceId }: { spaceId: string }) {
     setSection("overview");
   };
   const sync = space.data?.sync_state;
+  const wide = section === "upload" || section === "agents";
   return (
-    <div className="studio">
+    <div className={`studio${wide ? " studio-wide" : ""}`}>
       <aside className="studio-nav">
         <Link className="back-link" to="/spaces">
           <LeftOutlined /> 返回所有空間
@@ -129,46 +130,35 @@ export function SpaceStudio({ spaceId }: { spaceId: string }) {
           ) : (
             <Load query={context}>
               <p className="muted">
-                本空間已接入 Agent：{
-                  context.data?.agents.map((a) => a.agent_name).join("、") ||
-                  "無"
-                }
+                本空間已接入 Agent：
+                {context.data?.agents.map((a) => a.agent_name).join("、") ||
+                  "無"}
                 。授權由團隊管理員管理。
               </p>
             </Load>
           ))}
       </section>
-      <section className="studio-detail">
-        {section === "overview" && (
-          <DetailPanel
-            spaceId={spaceId}
-            space={space.data}
-            context={context.data}
-            selection={selection}
-            onSelect={pick}
-          />
-        )}
-        {section === "search" &&
-          (hit ? (
-            <HitDetail spaceId={spaceId} hit={hit} />
-          ) : (
-            <aside className="detail-empty">
-              <p className="muted">在左側選擇一筆檢索結果查看內容。</p>
-            </aside>
-          ))}
-        {section === "upload" && (
-          <aside className="detail-empty">
-            <p className="muted">
-              支援 .md、.txt 與文字型 PDF。每檔最多 10 MB、100 頁、200,000
-              字元；索引完成後，已授權的外部 Agent 才能檢索。
-            </p>
-          </aside>
-        )}
-        {section === "agents" &&
-          (admin ? (
-            <p className="muted">在左側管理此空間的 Agent 與成員授權。</p>
-          ) : null)}
-      </section>
+      {!wide && (
+        <section className="studio-detail">
+          {section === "overview" && (
+            <DetailPanel
+              spaceId={spaceId}
+              space={space.data}
+              context={context.data}
+              selection={selection}
+              onSelect={pick}
+            />
+          )}
+          {section === "search" &&
+            (hit ? (
+              <HitDetail spaceId={spaceId} hit={hit} />
+            ) : (
+              <aside className="detail-empty">
+                <p className="muted">在左側選擇一筆檢索結果查看內容。</p>
+              </aside>
+            ))}
+        </section>
+      )}
     </div>
   );
 }
@@ -204,7 +194,8 @@ function ContextTree({
                 )}
                 onClick={() => onSelect({ type: "category", key: c.key })}
               >
-                {c.key === "general" ? "未分類" : c.key} <i>{c.document_count}</i>
+                {c.key === "general" ? "未分類" : c.key}{" "}
+                <i>{c.document_count}</i>
               </button>
               <ul>
                 {c.recent.map((d) => (
@@ -212,7 +203,10 @@ function ContextTree({
                     <button
                       className={
                         "leaf " +
-                        cls(selection.type === "document" && selection.id === d.id)
+                        cls(
+                          selection.type === "document" &&
+                            selection.id === d.id,
+                        )
                       }
                       title={d.filename}
                       onClick={() => onSelect({ type: "document", id: d.id })}
@@ -224,9 +218,7 @@ function ContextTree({
               </ul>
             </li>
           ))}
-          {!context?.categories.length && (
-            <li className="dim">尚無文件</li>
-          )}
+          {!context?.categories.length && <li className="dim">尚無文件</li>}
         </ul>
       </div>
       <div className="ctree-branch">
@@ -249,9 +241,15 @@ function ContextTree({
                 {!s.active && <Tag className="mini-tag">停用</Tag>}
               </button>
               <ul className="ctree-sub">
-                <li>memories <i>{s.memory_count}</i></li>
-                <li>peers <i>—</i></li>
-                <li>sessions <i>{s.session_count}</i></li>
+                <li>
+                  memories <i>{s.memory_count}</i>
+                </li>
+                <li>
+                  peers <i>—</i>
+                </li>
+                <li>
+                  sessions <i>{s.session_count}</i>
+                </li>
               </ul>
             </li>
           ))}
@@ -387,7 +385,9 @@ function DetailPanel({
     );
   }
   if (selection.type === "document")
-    return <DocumentDetail spaceId={spaceId} id={selection.id} context={context} />;
+    return (
+      <DocumentDetail spaceId={spaceId} id={selection.id} context={context} />
+    );
   if (selection.type === "subjects" && context)
     return (
       <div className="detail">
@@ -428,9 +428,7 @@ function DetailPanel({
     return (
       <div className="detail">
         <h3>{subject.name}</h3>
-        <p className="muted">
-          服務對象 · 所屬 Agent：{subject.agent_name}
-        </p>
+        <p className="muted">服務對象 · 所屬 Agent：{subject.agent_name}</p>
         <dl className="kv">
           <dt>Subject ID</dt>
           <dd>
@@ -473,7 +471,8 @@ function DetailPanel({
 }
 
 function AgentReaders({ context }: { context: SpaceContext }) {
-  if (!context.agents.length) return <p className="muted">尚未授權任何 Agent。</p>;
+  if (!context.agents.length)
+    return <p className="muted">尚未授權任何 Agent。</p>;
   return (
     <ul className="plain-list">
       {context.agents.map((a) => (
@@ -507,7 +506,9 @@ function DocumentDetail({
           </dd>
           <dt>狀態</dt>
           <dd>
-            <Dot value={data.data?.deleted ? "deleted" : data.data?.state || ""} />
+            <Dot
+              value={data.data?.deleted ? "deleted" : data.data?.state || ""}
+            />
           </dd>
           <dt>大小</dt>
           <dd>{data.data ? Math.ceil(data.data.byte_size / 1024) : 0} KB</dd>
@@ -517,7 +518,10 @@ function DocumentDetail({
           <dd>{data.data ? when(data.data.created_at) : ""}</dd>
           <dt>Checksum</dt>
           <dd>
-            <Typography.Text className="id" copyable={{ text: data.data?.checksum }}>
+            <Typography.Text
+              className="id"
+              copyable={{ text: data.data?.checksum }}
+            >
               {(data.data?.checksum || "").slice(0, 12)}…
             </Typography.Text>
           </dd>
@@ -534,7 +538,9 @@ function DocumentDetail({
             <p className="memory-text">{c.content}</p>
           </div>
         ))}
-        {!data.data?.chunks.length && <p className="muted">尚未有可顯示片段。</p>}
+        {!data.data?.chunks.length && (
+          <p className="muted">尚未有可顯示片段。</p>
+        )}
       </Load>
     </div>
   );
@@ -642,12 +648,12 @@ function AgentGrants({
     people: { person_id: string; level: string; active: boolean }[];
     agents: { agent_id: string; active: boolean }[];
   }>(`/spaces/${spaceId}/grants`);
-  const people = useData<{ items: { person_id: string; email: string; active: boolean }[] }>(
-    "/members",
-  );
-  const agents = useData<{ items: { id: string; name: string; active: boolean }[] }>(
-    "/agents",
-  );
+  const people = useData<{
+    items: { person_id: string; email: string; active: boolean }[];
+  }>("/members");
+  const agents = useData<{
+    items: { id: string; name: string; active: boolean }[];
+  }>("/agents");
   const write = useWrite();
   const forms = useForms();
   const navigate = useNavigate();

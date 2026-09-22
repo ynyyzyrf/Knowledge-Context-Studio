@@ -200,7 +200,7 @@ export function Documents({ spaceId }: { spaceId: string }) {
             },
           ]}
         />
-        <Space style={{ marginTop: 12 }}>
+        <Space wrap style={{ marginTop: 12 }}>
           <Button
             disabled={!offset}
             onClick={() => setOffset(Math.max(0, offset - 20))}
