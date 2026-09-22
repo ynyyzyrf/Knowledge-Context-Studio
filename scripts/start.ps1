@@ -18,6 +18,17 @@ try {
     if (!(Test-Path -LiteralPath 'web/dist/index.html')) { throw 'Frontend build is missing; rerun without -SkipBuild.' }
     docker compose up -d --wait postgres
     if ($LASTEXITCODE) { throw 'Database startup failed' }
+    if (Test-Path -LiteralPath 'runtime/engine.json') {
+        docker compose -f compose.yaml -f compose.engine.yaml up -d engine
+        if ($LASTEXITCODE) { throw 'Private engine startup failed' }
+        $engineReady = $false
+        for ($attempt = 0; $attempt -lt 20; $attempt++) {
+            uv run python scripts/check-engine.py 2>$null
+            if (!$LASTEXITCODE) { $engineReady = $true; break }
+            Start-Sleep -Milliseconds 500
+        }
+        if (!$engineReady) { throw 'Private vector index is not ready; inspect engine logs.' }
+    }
     uv run alembic upgrade head
     if ($LASTEXITCODE) { throw 'Migration failed' }
     $runtimeDir = Join-Path $projectRoot 'runtime'

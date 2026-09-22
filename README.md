@@ -1,6 +1,8 @@
 # Knowledge Context Studio
 
-內部團隊 V1.0，正在開發。管理前端已對接帳號、外部 Agent、空間授權、會話提取任務和記憶治理 API。Agent 在外部運行；平台不內置 Agent 執行器。文件匯入、引擎發布、檢索與正式生產驗收尚未完成。
+**最新進度：[專案進度總覽](PROGRESS.md)**（已完成、待驗收、下一步與證據）。
+
+內部團隊 V1.0，正在開發。管理前端、文件匯入、記憶治理、引擎發布與授權檢索已有本機驗收。Agent 在外部運行；平台不內置 Agent 執行器。第三方 Agent 自主取用及正式生產驗收尚未完成。
 
 ## 啟動工作台
 
@@ -50,7 +52,35 @@ uv run python -m kcs.manage bootstrap --email your-email@example.com
 - `KCS_MODEL_BASE_URL`：API 根路徑，例如 `https://your-provider.example/v1`。
 - `KCS_MODEL_API_KEY`：API 金鑰。
 - `KCS_CHAT_MODEL`：聊天模型名稱。
+- `KCS_EMBEDDING_BASE_URL`：可選，向量模型 API 根路徑；留空時沿用 `KCS_MODEL_BASE_URL`。
+- `KCS_EMBEDDING_API_KEY`：可選，向量模型 API 金鑰；留空且未配置 `KCS_EMBEDDING_BASE_URL` 時沿用 `KCS_MODEL_API_KEY`。
 - `KCS_EMBEDDING_MODEL`：向量模型名稱。
+
+聊天與向量可以使用不同供應商，例如聊天走內部 metis 網關、向量走 SiliconFlow：
+
+```dotenv
+KCS_MODEL_BASE_URL=http://zsgw.sjdistributor.com:40000/v1
+KCS_MODEL_HTTP_ALLOWED_ORIGIN=http://zsgw.sjdistributor.com:40000
+KCS_MODEL_API_KEY=sk-...
+KCS_CHAT_MODEL=metis-coder
+
+KCS_EMBEDDING_BASE_URL=https://api.siliconflow.cn/v1
+KCS_EMBEDDING_API_KEY=sk-...
+KCS_EMBEDDING_MODEL=BAAI/bge-m3
+```
+
+SiliconFlow 的 Embeddings API 使用 OpenAI 相容路徑。若聊天和向量都使用同一個 SiliconFlow key，也可直接配置為：
+
+```dotenv
+KCS_MODEL_BASE_URL=https://api.siliconflow.cn/v1
+KCS_MODEL_API_KEY=sk-...
+KCS_CHAT_MODEL=your-chat-model
+KCS_EMBEDDING_MODEL=BAAI/bge-m3
+```
+
+`KCS_MODEL_BASE_URL` 和 `KCS_EMBEDDING_BASE_URL` 必須停在 `/v1`，程式會自行請求 `/chat/completions` 或 `/embeddings`；不要填成完整的 `/v1/embeddings`。SiliconFlow 目前列出的 embedding 模型包含 `BAAI/bge-large-zh-v1.5`、`BAAI/bge-large-en-v1.5`、`netease-youdao/bce-embedding-base_v1`、`BAAI/bge-m3`、`Pro/BAAI/bge-m3`。中文／多語知識庫優先使用 `BAAI/bge-m3`；若使用 Pro 模型，請確認帳號權限和費用。
+
+`KCS_CHAT_MODEL` 仍需按聊天模型供應商另行配置；`check-models` 會同時真實呼叫聊天與向量模型。若只想先驗證聊天，使用 `check-chat`。
 
 `.env` 與 `runtime/` 不納入 Git，請限制本機檔案存取權限。外部模型 URL 預設必須使用 HTTPS；本機服務允許 HTTP。對使用者明確指定的 HTTP 服務，可在 `KCS_MODEL_HTTP_ALLOWED_ORIGIN` 填入精確的 `http://主機:埠`，例外不適用其他主機或埠。HTTP 傳輸不加密。程式不跟隨模型 API 重新導向。
 
@@ -89,3 +119,15 @@ Agent 透過 `POST /v1/sessions/{id}/commit` 提交 `{ "idempotency_key": "..." 
 PostgreSQL 測試只使用 `kcs_test` 資料庫，結束後清理本次產生的 schema，不清空產品資料庫。
 
 完整工作範圍和進度見 [implementation.md](docs/implementation.md)。
+
+## 記憶發布與外部讀回
+
+候選審核後由背景 worker 發布；正文與向量索引驗證成功後才標示有效。外部 Agent 使用 `GET /v1/subjects/{id}/memories` 及 `POST /v1/context` 讀取授權記憶。工作台「API 接入測試」提供有效記憶與語意檢索驗證，不執行 Agent。
+
+私有引擎配置、Python 接入範例、錯誤與刪除語意見 [外部 Agent 讀回指南](docs/external-agent-readback.md)。完整生產部署與災難恢復驗收仍待完成。
+
+## 文件匯入
+
+工作台「知識空間 → 開啟空間 → 文件匯入」支援 Markdown、UTF-8 文字與文字型 PDF。檔案由持久化背景任務解析、分段並建立真正的向量索引；成功後，獲授權的外部 Agent 可透過 `/v1/context` 讀回原文與來源。支援狀態查詢、解析預覽、失敗重試、刪除及背景清理。
+
+上限、API、權限及不支援格式見 [文件匯入指南](docs/document-import.md)；測試與瀏覽器證據見 [匯入驗收](docs/evidence/document-import-acceptance.md)。平台不執行 Agent。

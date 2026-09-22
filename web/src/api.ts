@@ -28,7 +28,11 @@ export async function request<T>(
   options?: { csrf?: string; token?: string; signal?: AbortSignal },
 ): Promise<T> {
   const headers: Record<string, string> = {};
-  if (body !== undefined) headers["Content-Type"] = "application/json";
+  const binary = body instanceof Blob;
+  if (body !== undefined)
+    headers["Content-Type"] = binary
+      ? "application/octet-stream"
+      : "application/json";
   if (options?.csrf) headers["X-CSRF-Token"] = options.csrf;
   if (options?.token) headers.Authorization = `Bearer ${options.token}`;
   let response: Response;
@@ -36,7 +40,8 @@ export async function request<T>(
     response = await fetch(path, {
       method,
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body:
+        body === undefined ? undefined : binary ? body : JSON.stringify(body),
       credentials: options?.token ? "omit" : "same-origin",
       signal: options?.signal,
     });

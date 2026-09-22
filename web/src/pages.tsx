@@ -3,10 +3,8 @@ import { useNavigate } from "react-router-dom";
 import {
   Alert,
   Button,
-  Card,
   Drawer,
   Modal,
-  Select,
   Space,
   Table,
   Tabs,
@@ -21,10 +19,12 @@ import {
 } from "@ant-design/icons";
 import {
   Blank,
+  Dot,
   Heading,
   ID,
   Load,
   Status,
+  ago,
   useData,
   useForms,
   useWorkspace,
@@ -43,12 +43,12 @@ import type {
   Space as SpaceType,
 } from "./types";
 const nameField: Field = { name: "name", label: "名稱", max: 160 };
-const roleOptions = [
+export const roleOptions = [
   { value: "viewer", label: "檢視者" },
   { value: "editor", label: "編輯者" },
   { value: "tenant_admin", label: "團隊管理員" },
 ];
-const activeField: Field = {
+export const activeField: Field = {
   name: "active",
   label: "授權狀態",
   type: "select",
@@ -64,243 +64,88 @@ export function Spaces() {
   const data = useData<Items<SpaceType>>("/spaces");
   const write = useWrite();
   const forms = useForms();
-  const [selected, setSelected] = useState<SpaceType | null>(null);
+  const navigate = useNavigate();
+  const create = () =>
+    forms.open({
+      title: "建立知識空間",
+      note: "空間之間預設完全隔離：文件、記憶、檢索索引與 Agent 權限互相獨立。",
+      fields: [
+        nameField,
+        {
+          name: "description",
+          label: "一句描述",
+          type: "textarea",
+          max: 500,
+          required: false,
+        },
+      ],
+      submit: (v) => write("/spaces", "POST", v),
+    });
   return (
     <>
       <Heading
         title="知識空間"
-        note="依專案組織知識，清楚界定人員與外部 Agent 的存取範圍。"
+        note="管理公司內彼此隔離的 Knowledge Context，每個空間擁有獨立的文件、記憶、檢索索引與 Agent 權限。"
         extra={
           admin && (
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={() =>
-                forms.open({
-                  title: "建立知識空間",
-                  fields: [nameField],
-                  submit: (v) => write("/spaces", "POST", v),
-                })
-              }
-            >
-              建立空間
+            <Button type="primary" icon={<PlusOutlined />} onClick={create}>
+              建立知識空間
             </Button>
           )
         }
-      />
-      <Alert
-        className="section-note"
-        type="info"
-        showIcon
-        message="目前可管理空間與授權；文件匯入與檢索尚未接通。"
       />
       <Load query={data}>
         {data.data?.items.length ? (
           <div className="space-grid">
             {data.data.items.map((s) => (
-              <Card
+              <article
                 key={s.id}
                 className="space-card"
-                title={s.name}
-                extra={<Status value={s.sync_state} />}
+                onClick={() => navigate(`/spaces/${s.id}`)}
               >
-                <div className="space-mark">知</div>
-                <p className="muted">
-                  {s.sync_state === "ready" ? "引擎同步完成" : "待完成引擎同步"}
+                <header className="space-card-head">
+                  <h3>{s.name}</h3>
+                  <Dot value={s.sync_state} />
+                </header>
+                <p className="space-desc">
+                  {s.description || <span className="dim">尚未填寫描述</span>}
                 </p>
-                <div className="card-bottom">
-                  <ID value={s.id} />
+                <footer className="space-stats">
+                  <span>
+                    <b>{s.document_count ?? 0}</b> 文件
+                  </span>
+                  <span>
+                    <b>{s.memory_count ?? 0}</b> Memory
+                  </span>
+                  <span>
+                    <b>{s.agent_count ?? 0}</b> Agent
+                  </span>
+                  <span className="space-updated">
+                    更新 {ago(s.last_activity_at)}
+                  </span>
+                </footer>
+                <div className="space-card-foot">
                   <Button
                     type="link"
+                    size="small"
                     icon={<ArrowRightOutlined />}
-                    onClick={() => setSelected(s)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate(`/spaces/${s.id}`);
+                    }}
                   >
-                    {admin ? "管理授權" : "查看空間"}
+                    進入空間
                   </Button>
                 </div>
-              </Card>
+              </article>
             ))}
           </div>
         ) : (
-          <Blank text="尚無可存取的知識空間" />
+          <Blank text="尚無知識空間。建立第一個空間，開始隔離管理知識與 Agent 權限。" />
         )}
       </Load>
-      {selected && (
-        <SpaceDetail
-          space={selected}
-          close={() => setSelected(null)}
-          admin={admin}
-        />
-      )}
       {forms.modal}
     </>
-  );
-}
-function SpaceDetail({
-  space,
-  close,
-  admin,
-}: {
-  space: SpaceType;
-  close: () => void;
-  admin: boolean;
-}) {
-  const grants = useData<{
-    people: { person_id: string; level: string; active: boolean }[];
-    agents: { agent_id: string; active: boolean }[];
-  }>(`/spaces/${space.id}/grants`, admin);
-  const people = useData<Items<Person>>("/members", admin);
-  const agents = useData<Items<Entity>>("/agents", admin);
-  const write = useWrite();
-  const forms = useForms();
-  return (
-    <Drawer open title={space.name} width={660} onClose={close}>
-      <Space direction="vertical" style={{ width: "100%" }} size="large">
-        <Status value={space.sync_state} />
-        <Typography.Paragraph copyable>{space.id}</Typography.Paragraph>
-        {!admin ? (
-          <Alert
-            type="info"
-            message="你可以查看此空間；內容匯入與檢索功能尚未接通。"
-          />
-        ) : (
-          <Load query={grants}>
-            <Tabs
-              items={[
-                {
-                  key: "people",
-                  label: "人員授權",
-                  children: (
-                    <>
-                      <Button
-                        onClick={() =>
-                          forms.open({
-                            title: "設定人員授權",
-                            fields: [
-                              {
-                                name: "person_id",
-                                label: "團隊成員",
-                                type: "select",
-                                options: people.data?.items
-                                  .filter((x) => x.active)
-                                  .map((x) => ({
-                                    value: x.person_id,
-                                    label: x.email,
-                                  })),
-                              },
-                              {
-                                name: "level",
-                                label: "空間權限",
-                                type: "select",
-                                options: roleOptions.slice(0, 2),
-                              },
-                              activeField,
-                            ],
-                            values: { level: "viewer", active: "yes" },
-                            submit: (v) =>
-                              write(
-                                `/spaces/${space.id}/people/${v.person_id}`,
-                                "PUT",
-                                { level: v.level, active: v.active === "yes" },
-                              ),
-                          })
-                        }
-                      >
-                        設定授權
-                      </Button>
-                      <Table
-                        rowKey="person_id"
-                        pagination={false}
-                        dataSource={grants.data?.people}
-                        columns={[
-                          {
-                            title: "成員",
-                            dataIndex: "person_id",
-                            render: (id) =>
-                              people.data?.items.find((p) => p.person_id === id)
-                                ?.email || id,
-                          },
-                          {
-                            title: "權限",
-                            dataIndex: "level",
-                            render: (v) => <Status value={v} />,
-                          },
-                          {
-                            title: "狀態",
-                            dataIndex: "active",
-                            render: (v) => (
-                              <Status value={v ? "active" : "disabled"} />
-                            ),
-                          },
-                        ]}
-                      />
-                    </>
-                  ),
-                },
-                {
-                  key: "agents",
-                  label: "Agent 授權",
-                  children: (
-                    <>
-                      <Button
-                        onClick={() =>
-                          forms.open({
-                            title: "設定外部 Agent 授權",
-                            fields: [
-                              {
-                                name: "agent_id",
-                                label: "Agent",
-                                type: "select",
-                                options: agents.data?.items.map((a) => ({
-                                  value: a.id,
-                                  label: a.name,
-                                })),
-                              },
-                              activeField,
-                            ],
-                            values: { active: "yes" },
-                            submit: (v) =>
-                              write(
-                                `/spaces/${space.id}/agents/${v.agent_id}`,
-                                "PUT",
-                                { active: v.active === "yes" },
-                              ),
-                          })
-                        }
-                      >
-                        設定授權
-                      </Button>
-                      <Table
-                        rowKey="agent_id"
-                        pagination={false}
-                        dataSource={grants.data?.agents}
-                        columns={[
-                          {
-                            title: "Agent",
-                            dataIndex: "agent_id",
-                            render: (id) =>
-                              agents.data?.items.find((a) => a.id === id)
-                                ?.name || id,
-                          },
-                          {
-                            title: "狀態",
-                            dataIndex: "active",
-                            render: (v) => (
-                              <Status value={v ? "active" : "disabled"} />
-                            ),
-                          },
-                        ]}
-                      />
-                    </>
-                  ),
-                },
-              ]}
-            />
-          </Load>
-        )}
-      </Space>
-      {forms.modal}
-    </Drawer>
   );
 }
 
@@ -413,7 +258,7 @@ function AgentDetail({ agent, close }: { agent: Entity; close: () => void }) {
       <Alert
         type="info"
         showIcon
-        message="服務對象是記憶隔離範圍，不是平台登入帳號。"
+        message="服務對象是記憶隔離範圍，不是平台登入帳號。Agent 可被授權存取一或多個知識空間，授權在各空間內管理。"
       />
       <Tabs
         items={[
@@ -630,7 +475,7 @@ function AgentDetail({ agent, close }: { agent: Entity; close: () => void }) {
                 setToken(issued!.token);
                 setIssued(null);
                 close();
-                navigate("/developer");
+                navigate("/settings?tab=api");
               }}
             >
               用於 API 接入測試
@@ -788,20 +633,22 @@ export function Jobs() {
   );
   return (
     <>
-      <Heading
-        title="任務中心"
-        note="追蹤會話提取的真實處理狀態。任務完成後，記憶仍需人工審核。"
-        extra={
-          <Space>
-            <Button onClick={() => setPoll(!poll)}>
-              {poll ? "暫停更新" : "自動更新"}
-            </Button>
-            <Button icon={<ReloadOutlined />} onClick={() => data.refetch()}>
-              重新整理
-            </Button>
-          </Space>
-        }
-      />
+      <div className="tab-head">
+        <div>
+          <h2>任務中心</h2>
+          <p className="muted">
+            追蹤會話提取的真實處理狀態。任務完成後，記憶仍需人工審核。
+          </p>
+        </div>
+        <Space>
+          <Button onClick={() => setPoll(!poll)}>
+            {poll ? "暫停更新" : "自動更新"}
+          </Button>
+          <Button icon={<ReloadOutlined />} onClick={() => data.refetch()}>
+            重新整理
+          </Button>
+        </Space>
+      </div>
       {poll && (
         <p className="muted">
           {running

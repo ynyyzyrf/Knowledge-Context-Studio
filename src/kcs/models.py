@@ -9,7 +9,9 @@ from sqlalchemy import (
     ForeignKey,
     ForeignKeyConstraint,
     Integer,
+    LargeBinary,
     String,
+    Text,
     UniqueConstraint,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -133,8 +135,54 @@ class KnowledgeSpace(Base):
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=identifier)
     tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
     name: Mapped[str] = mapped_column(String(160))
+    description: Mapped[str] = mapped_column(String(500), default="", server_default="")
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     sync_state: Mapped[str] = mapped_column(String(16), default="pending")
+
+
+class Document(Base):
+    __tablename__ = "documents"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "space_id"], ["knowledge_spaces.tenant_id", "knowledge_spaces.id"]
+        ),
+        UniqueConstraint("tenant_id", "space_id", "id"),
+        CheckConstraint("state in ('pending','running','retry','succeeded','failed')", name="document_state"),
+    )
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=identifier)
+    tenant_id: Mapped[str] = mapped_column(String(32), index=True)
+    space_id: Mapped[str] = mapped_column(String(32), index=True)
+    filename: Mapped[str] = mapped_column(String(200))
+    checksum: Mapped[str] = mapped_column(String(64), index=True)
+    byte_size: Mapped[int] = mapped_column(Integer)
+    source: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True, deferred=True)
+    uploaded_by: Mapped[str] = mapped_column(ForeignKey("people.id"))
+    deleted: Mapped[bool] = mapped_column(Boolean, default=False)
+    state: Mapped[str] = mapped_column(String(16), default="pending", index=True)
+    attempt: Mapped[int] = mapped_column(Integer, default=0)
+    chunk_count: Mapped[int] = mapped_column(Integer, default=0)
+    available_at: Mapped[float] = mapped_column(Float, default=time.time)
+    lease_token: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    lease_until: Mapped[float | None] = mapped_column(Float, nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    request_id: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[float] = mapped_column(Float, default=time.time)
+
+
+class DocumentChunk(Base):
+    __tablename__ = "document_chunks"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "space_id", "document_id"],
+            ["documents.tenant_id", "documents.space_id", "documents.id"],
+        ),
+    )
+    document_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    number: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String(32))
+    space_id: Mapped[str] = mapped_column(String(32))
+    page: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    content: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class AgentSpaceGrant(Base):

@@ -1,5 +1,7 @@
 # V1.0 implementation ledger and plan
 
+Latest status: [專案進度總覽](../PROGRESS.md). This ledger retains chronological engineering decisions and evidence; older entries describe their date, not current product behavior. Update the overview after each delivery or acceptance result.
+
 Objective: complete the internal-team V1.0 and start the project. Scope remains R01–R12 and N01–N09 in ../docs/production (workspace root), not a demo.
 
 ## Rulings
@@ -75,3 +77,27 @@ Objective: complete the internal-team V1.0 and start the project. Scope remains 
 - Five frontend tests, production build and runtime dependency audit pass. Fixed session-expiry query observer hang, same-token retry, rejection-reason audit loss, terminal polling and stale job details. Build still warns about main chunk size.
 - scripts/start.ps1 builds frontend and starts/restarts only recognized local API/worker processes, runs migrations, checks API/database and frontend readiness. Initial local admin credentials stay in a restricted ignored runtime file. This is not a production process supervisor.
 - Remaining production path: ingestion/indexing, engine publication/deletion and authorized context retrieval, vector model selection, real external consumer acceptance, extraction format reliability, performance and tested recovery/deployment.
+
+### Memory publication and readback package (2026-09-22)
+
+- Connected private pinned native OpenViking to real BAAI/bge-m3 (1024 dimensions), preserving the separately configured chat/embedding providers. No embedded Agent runtime.
+- Added fenced durable publication, exact-version deletion with retries/reconciliation, current authorized memory listing and semantic `/v1/context`; engine hits only identify candidates and PostgreSQL supplies current approved content. Revalidate credential and Subject after engine I/O.
+- Added API testing UI for published memory and semantic reference retrieval; verified real HTTP submission, real extraction, browser approval, publication and a paraphrased question returning the fact with provenance.
+- Found and fixed missing native index after interrupted initialization; require actual index readiness and per-URI indexed count. Removed unnecessary deletion wait on ancestor semantic refresh; verify exact body and vectors absent instead.
+- Evidence: docs/evidence/readback-acceptance.md; integration guide: docs/external-agent-readback.md. Full PG suite 51 passed/2 skipped, focused PG boundaries 8 passed, true vector roundtrip 1 passed, native fixture contract 1 passed, frontend 5 passed/build passed. Independent review found no remaining important leak/permanent cleanup omission in the revised boundary.
+- P3/P4 advance for memories only. File ingestion, external Agent consumer, production delivery/recovery/performance remain open; overall production goal is not complete.
+
+### Durable file ingestion and authorized retrieval (2026-09-22)
+
+- Added real Markdown/UTF-8 text/text-PDF upload, bounded isolated parsing, durable document/chunk storage, leased indexing and persistent deletion reconciliation. No embedded Agent runtime. Migration `1db99657541c` applied with no schema drift.
+- Space UI supports upload, polling, source preview, retry and delete. External `/v1/context` now searches authorized space roots alongside Subject memories, rechecks grants after engine I/O and supplies only current succeeded PostgreSQL chunks.
+- Fixed format-confused checksum dedup and enforced a hard parser process memory ceiling; independent follow-up review found no new P1/P2.
+- Full PG suite 59 passed/3 opt-in skips before final three added boundary tests; final document PG suite 10 passed; real three-format native-engine roundtrip 1 passed; frontend 6 passed/build passed. Browser verified Chinese file upload, completed index, preview and paraphrased reference retrieval. API verified deletion and engine cleanup; isolated acceptance identities were disabled/revoked.
+- Evidence: `docs/evidence/document-import-acceptance.md`; usage/API: `docs/document-import.md`. File ingestion portion of P3/P4 advances; third-party autonomous Agent use, production deployment/recovery/load/quality acceptance remain outstanding. DOCX/OCR/batch imports are not included.
+
+### Two-layer information architecture refactor (2026-09-22)
+
+- Restructured the frontend into two product layers. Organization level: Knowledge Space list (dense stat cards: files/memory/agents/last activity, no UUID exposure), external Agent access, members, audit and a Settings page that now hosts jobs, memory governance and API testing. Space level: full-screen per-space Context Studio with left space nav (files/search/upload/agent access), middle context tree (context:// resources by filename-derived category plus subjects with memories/peers/sessions counts) and a right detail panel with URI, metadata, agent readability and per-subject read/write scopes.
+- Backend: added `description` to knowledge spaces (migration `c58d1e7a2b40`, applied, alembic check clean), space list/detail now return document/agent/memory counts and last activity, new admin-only `PATCH /spaces/{id}`, `GET /spaces/{id}/context` tree data and `POST /spaces/{id}/search` which queries only that space's engine root and verifies hits against current PostgreSQL chunks. Memory counts attribute a subject's memories to every space its agent can read, matching the current memory ownership model.
+- Fixed a useParams-outside-Route bug in the space layer by resolving the space id via matchPath in the shell and passing it as a prop.
+- Verification: backend sqlite suite 60 passed/8 opt-in skips (3 new tests covering description+stats, context tree, verified search); ruff clean on touched files; frontend 6 tests and production build pass; live browser smoke test on localhost:8088 covered login, org navigation, space cards, space studio tabs (context tree, search, grants) and settings tabs. Full browser acceptance of the new IA and responsive behavior is still pending.

@@ -70,7 +70,11 @@ def new_revision(db, memory, auth, request, *, content, sources, status, reason)
     # Mark pending older operations obsolete. Running operations require completion fencing in the publisher.
     db.execute(
         update(MemoryProjection)
-        .where(MemoryProjection.memory_id == memory.id, MemoryProjection.state.in_(["pending", "retry"]))
+        .where(
+            MemoryProjection.memory_id == memory.id,
+            MemoryProjection.kind == "upsert",
+            MemoryProjection.state.in_(["pending", "retry", "succeeded", "failed"]),
+        )
         .values(state="obsolete")
     )
     revision = MemoryRevision(
@@ -165,6 +169,41 @@ def mutable_memory(db, tenant_id, memory_id, body):
     if memory.status == "deleted":
         raise HTTPException(409, "記憶已刪除")
     return memory
+
+
+@router.post("/memories/{memory_id}/publication/retry", status_code=202)
+def retry_publication(
+    tenant_id: str,
+    memory_id: str,
+    body: VersionInput,
+    request: Request,
+    auth: PersonAuth = Depends(person_auth),
+    db: Session = Depends(get_db),
+):
+    tenant_membership(db, tenant_id, auth, admin=True)
+    memory = scoped_object(db, MemoryRecord, tenant_id, memory_id)
+    expected(memory.current_version, body.expected_version)
+    p = db.scalar(
+        select(MemoryProjection)
+        .where(MemoryProjection.memory_id == memory.id, MemoryProjection.version == memory.current_version)
+        .with_for_update()
+    )
+    if p.state != "failed":
+        raise HTTPException(409, "只能重試失敗的發布任務")
+    if p.kind == "upsert":
+        usable_subject(db, tenant_id, memory.agent_id, memory.subject_id)
+    record(
+        db,
+        request,
+        auth,
+        tenant_id,
+        "memory.publication_retried",
+        memory.id,
+        {"version": p.version, "previous_attempts": p.attempt},
+    )
+    p.state, p.attempt, p.available_at, p.error_code = "pending", 0, time.time(), None
+    p.request_id = request.state.request_id
+    return payload(db, memory)
 
 
 @router.patch("/memories/{memory_id}", status_code=202)

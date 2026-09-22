@@ -37,10 +37,18 @@ class ModelService:
         if not settings.model_base_url or not settings.model_api_key.get_secret_value():
             raise ModelServiceError("model_not_configured")
         self.settings = settings
-        self.client = httpx.Client(
-            base_url=settings.model_base_url.rstrip("/") + "/",
-            headers={"Authorization": "Bearer " + settings.model_api_key.get_secret_value()},
-            timeout=settings.model_timeout_seconds,
+        self.chat_client = self._client(settings.model_base_url, settings.model_api_key, transport)
+        self.embedding_client = self._client(
+            settings.resolved_embedding_base_url,
+            settings.resolved_embedding_api_key,
+            transport,
+        )
+
+    def _client(self, base_url, api_key, transport):
+        return httpx.Client(
+            base_url=base_url.rstrip("/") + "/",
+            headers={"Authorization": "Bearer " + api_key.get_secret_value()},
+            timeout=self.settings.model_timeout_seconds,
             follow_redirects=False,
             transport=transport,
             trust_env=False,
@@ -50,11 +58,12 @@ class ModelService:
         return self
 
     def __exit__(self, *args):
-        self.client.close()
+        self.chat_client.close()
+        self.embedding_client.close()
 
-    def _post(self, path, body):
+    def _post(self, client, path, body):
         try:
-            with self.client.stream("POST", path, json=body) as response:
+            with client.stream("POST", path, json=body) as response:
                 if response.status_code in (401, 403):
                     raise ModelServiceError("model_auth_failed")
                 if response.status_code == 429:
@@ -83,6 +92,7 @@ class ModelService:
         if not self.settings.chat_model:
             raise ModelServiceError("chat_not_configured")
         result = self._post(
+            self.chat_client,
             "chat/completions",
             {
                 "model": self.settings.chat_model,
@@ -107,9 +117,18 @@ class ModelService:
     def embed(self, texts: list[str]):
         if not self.settings.embedding_model:
             raise ModelServiceError("embedding_not_configured")
+        if (
+            not self.settings.resolved_embedding_base_url
+            or not self.settings.resolved_embedding_api_key.get_secret_value()
+        ):
+            raise ModelServiceError("model_not_configured")
         if not texts or len(texts) > 64:
             raise ValueError("Embedding batch must contain 1 to 64 inputs")
-        result = self._post("embeddings", {"model": self.settings.embedding_model, "input": texts})
+        result = self._post(
+            self.embedding_client,
+            "embeddings",
+            {"model": self.settings.embedding_model, "input": texts},
+        )
         try:
             rows = sorted(result["data"], key=lambda row: row["index"])
             if len(rows) != len(texts) or [row["index"] for row in rows] != list(range(len(texts))):

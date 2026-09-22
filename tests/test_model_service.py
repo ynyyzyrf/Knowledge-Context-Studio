@@ -7,6 +7,7 @@ from kcs.model_service import ModelService, ModelServiceError
 
 def configured(**kwargs):
     return Settings(
+        _env_file=None,
         database_url="sqlite://",
         testing=True,
         model_base_url="https://provider.example.test/v1",
@@ -45,6 +46,33 @@ def test_chat_and_embedding_contract():
         result = service.chat([{"role": "user", "content": "問題"}])
         assert result.text == "答案" and result.input_tokens == 12 and result.output_tokens == 3
         assert service.embed(["內容"]).vectors == [[0.1, 0.2]]
+
+
+def test_embedding_can_use_separate_provider_configuration():
+    settings = configured(
+        embedding_base_url="https://embedding.example.test/v1",
+        embedding_api_key="embedding-key",
+    )
+
+    def respond(request):
+        if request.url.host == "provider.example.test":
+            assert request.url.path == "/v1/chat/completions"
+            assert request.headers["Authorization"] == "Bearer private-key"
+            return httpx.Response(
+                200,
+                json={"choices": [{"message": {"content": "答案"}}]},
+            )
+        assert request.url.host == "embedding.example.test"
+        assert request.url.path == "/v1/embeddings"
+        assert request.headers["Authorization"] == "Bearer embedding-key"
+        return httpx.Response(
+            200,
+            json={"data": [{"index": 0, "embedding": [0.1, 0.2, 0.3]}]},
+        )
+
+    with ModelService(settings, transport=httpx.MockTransport(respond)) as service:
+        assert service.chat([{"role": "user", "content": "問題"}]).text == "答案"
+        assert service.embed(["內容"]).vectors == [[0.1, 0.2, 0.3]]
 
 
 @pytest.mark.parametrize(

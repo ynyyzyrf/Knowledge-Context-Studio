@@ -2,6 +2,21 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { request, detailText, ApiError } from "./api";
 afterEach(() => vi.unstubAllGlobals());
 describe("API boundary", () => {
+  it("uploads original bytes with CSRF and without JSON encoding", async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(new Response("{}", { status: 202 }));
+    vi.stubGlobal("fetch", fetch);
+    const file = new Blob(["文件正文"], { type: "text/plain" });
+    await request("/v1/documents?filename=guide.txt", "POST", file, {
+      csrf: "test-csrf",
+    });
+    expect(fetch.mock.calls[0][1].body).toBe(file);
+    expect(fetch.mock.calls[0][1].headers["X-CSRF-Token"]).toBe("test-csrf");
+    expect(fetch.mock.calls[0][1].headers["Content-Type"]).toBe(
+      "application/octet-stream",
+    );
+  });
   it("keeps agent auth separate from browser cookies", async () => {
     const fetch = vi
       .fn()

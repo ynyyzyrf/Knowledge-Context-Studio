@@ -9,7 +9,9 @@ from sqlalchemy.exc import IntegrityError
 from .agent_routes import router as agent_router
 from .auth_routes import router
 from .config import Settings
+from .context_routes import router as context_router
 from .database import Database
+from .document_routes import router as document_router
 from .job_routes import router as job_router
 from .memory_routes import router as memory_router
 from .session_routes import router as session_router
@@ -57,6 +59,8 @@ def create_app(settings: Settings | None = None):
     app.include_router(session_router)
     app.include_router(job_router)
     app.include_router(memory_router)
+    app.include_router(context_router)
+    app.include_router(document_router)
     if (settings.frontend_dist / "assets").is_dir():
         app.mount("/assets", StaticFiles(directory=settings.frontend_dist / "assets"), name="assets")
 

@@ -24,7 +24,9 @@ def init_config():
     (root / ".env").write_text(
         f"KCS_DATABASE_URL=postgresql+psycopg://kcs:{password}@127.0.0.1:55488/kcs\n"
         "KCS_PUBLIC_ORIGIN=http://localhost:8088\nKCS_SECURE_COOKIES=false\n"
-        "KCS_MODEL_BASE_URL=\nKCS_MODEL_API_KEY=\nKCS_CHAT_MODEL=\nKCS_EMBEDDING_MODEL=\n",
+        "KCS_MODEL_BASE_URL=\nKCS_MODEL_API_KEY=\nKCS_CHAT_MODEL=\n"
+        "KCS_EMBEDDING_BASE_URL=\nKCS_EMBEDDING_HTTP_ALLOWED_ORIGIN=\n"
+        "KCS_EMBEDDING_API_KEY=\nKCS_EMBEDDING_MODEL=\n",
         encoding="utf-8",
     )
     print("Local configuration created. Model settings can be edited in .env.")

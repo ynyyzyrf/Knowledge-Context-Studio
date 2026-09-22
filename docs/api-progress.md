@@ -1,5 +1,7 @@
 # 已實作 API 與邊界
 
+最新整體狀態見 [專案進度總覽](../PROGRESS.md)。本頁為 API 摘要；文件匯入與讀回契約另見 [文件匯入](document-import.md)及[外部讀回](external-agent-readback.md)。
+
 所有人員管理請求使用登入 Cookie；變更請求另需 `X-CSRF-Token`。Agent 使用產品層 Bearer token，身份由 token 決定。
 
 | 路徑 | 功能 | 權限 |

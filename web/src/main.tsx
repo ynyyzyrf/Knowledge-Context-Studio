@@ -5,6 +5,7 @@ import {
   Navigate,
   Route,
   Routes,
+  matchPath,
   useLocation,
   useNavigate,
 } from "react-router-dom";
@@ -29,11 +30,11 @@ import {
 import zhTW from "antd/locale/zh_TW";
 import { ApiError, request } from "./api";
 import { forgetSession } from "./session";
-import { Context, Problem } from "./shared";
+import { Context, Problem, useWorkspace } from "./shared";
 import type { Membership, Profile } from "./types";
-import { Agents, Spaces, Members, Jobs, AuditPage } from "./pages";
-import { Cognition } from "./cognition";
-import { Developer } from "./developer";
+import { Agents, Spaces, Members, AuditPage } from "./pages";
+import { Settings } from "./settings";
+import { SpaceStudio } from "./studio";
 import "./style.css";
 const client = new QueryClient({
   defaultOptions: {
@@ -61,7 +62,7 @@ function Login() {
           從授權、提取到審核，每一步都有跡可循。
         </p>
         <div className="login-footer">
-          團隊知識 · 外部 Agent 接入 · 記憶治理
+          Knowledge Space 隔離 · Agent 授權 · 記憶治理
         </div>
       </section>
       <section className="login-form">
@@ -127,7 +128,7 @@ function Login() {
     </div>
   );
 }
-function Workspace({
+function Shell({
   profile,
   tenant,
   onTenant,
@@ -137,6 +138,29 @@ function Workspace({
   onTenant: (x: string) => void;
 }) {
   const [token, setToken] = useState("");
+  const location = useLocation();
+  const spaceMatch = matchPath("/spaces/:spaceId", location.pathname);
+  return (
+    <Context.Provider value={{ profile, tenant, token, setToken }}>
+      {spaceMatch?.params.spaceId ? (
+        // Second product layer: a dedicated full-screen studio per space.
+        <SpaceStudio spaceId={spaceMatch.params.spaceId} />
+      ) : (
+        <OrgShell profile={profile} tenant={tenant} onTenant={onTenant} />
+      )}
+    </Context.Provider>
+  );
+}
+function OrgShell({
+  profile,
+  tenant,
+  onTenant,
+}: {
+  profile: Profile;
+  tenant: Membership;
+  onTenant: (x: string) => void;
+}) {
+  const { setToken } = useWorkspace();
   const [logoutError, setLogoutError] = useState<unknown>();
   const [collapsed, setCollapsed] = useState(false);
   const [narrow, setNarrow] = useState(false);
@@ -145,26 +169,29 @@ function Workspace({
   const qc = useQueryClient();
   const admin = tenant.role === "tenant_admin";
   const items = [
-    { key: "/spaces", label: "知識空間" },
-    ...(admin
-      ? [
-          { key: "/agents", label: "外部 Agent 接入" },
-          { key: "/cognition", label: "記憶治理" },
-          { key: "/jobs", label: "任務中心" },
-        ]
-      : []),
-    { key: "/members", label: "團隊成員" },
-    ...(admin
-      ? [
-          { key: "/audit", label: "操作紀錄" },
-          { key: "/developer", label: "API 接入測試" },
-        ]
-      : []),
+    {
+      key: "workspace",
+      type: "group" as const,
+      label: "工作區",
+      children: [
+        { key: "/spaces", label: "知識空間" },
+        ...(admin ? [{ key: "/agents", label: "外部 Agent 接入" }] : []),
+      ],
+    },
+    {
+      key: "admin",
+      type: "group" as const,
+      label: "管理",
+      children: [
+        { key: "/members", label: "團隊成員" },
+        ...(admin ? [{ key: "/audit", label: "操作紀錄" }] : []),
+        { key: "/settings", label: "設定" },
+      ],
+    },
   ];
   return (
-    <Context.Provider value={{ profile, tenant, token, setToken }}>
-      <Layout className="workspace">
-        <Layout.Sider
+    <Layout className="workspace">
+      <Layout.Sider
           breakpoint="lg"
           onBreakpoint={setNarrow}
           collapsedWidth={0}
@@ -176,25 +203,18 @@ function Workspace({
           <div className="sidebar-brand">
             <b>K</b>
             <div>
-              知識與記憶<span>CONTEXT STUDIO</span>
+              Knowledge Context<span>CONTEXT STUDIO</span>
             </div>
           </div>
-          <div className="sidebar-label">工作空間</div>
           <Menu
             mode="inline"
-            selectedKeys={[location.pathname]}
+            selectedKeys={["/" + location.pathname.split("/")[1]]}
             items={items}
             onClick={({ key }) => {
               navigate(key);
               if (narrow) setCollapsed(true);
             }}
           />
-          <div className="sidebar-foot">
-            <span className="online-dot" />
-            內部團隊工作台
-            <br />
-            <small>Agent 在外部執行</small>
-          </div>
         </Layout.Sider>
         <Layout>
           <header className="topbar">
@@ -238,13 +258,11 @@ function Workspace({
             <Routes>
               <Route path="/spaces" element={<Spaces />} />
               <Route path="/members" element={<Members />} />
+              <Route path="/settings" element={<Settings />} />
               {admin && (
                 <>
                   <Route path="/agents" element={<Agents />} />
-                  <Route path="/cognition" element={<Cognition />} />
-                  <Route path="/jobs" element={<Jobs />} />
                   <Route path="/audit" element={<AuditPage />} />
-                  <Route path="/developer" element={<Developer />} />
                 </>
               )}
               <Route path="*" element={<Navigate to="/spaces" replace />} />
@@ -252,16 +270,16 @@ function Workspace({
           </main>
           <footer className="workspace-footer">
             Knowledge Context Studio · 內部版本{" "}
-            <span>所有操作以目前團隊權限為準</span>
+            <span>Knowledge Space 是知識與 Context 的最高隔離單元</span>
           </footer>
         </Layout>
       </Layout>
-    </Context.Provider>
   );
 }
 function App() {
   const qc = useQueryClient();
   const [tid, setTid] = useState("");
+  const location = useLocation();
   const profile = useQuery({
     queryKey: ["profile"],
     queryFn: () => request<Profile>("/v1/auth/me"),
@@ -311,7 +329,7 @@ function App() {
       </div>
     );
   return (
-    <Workspace
+    <Shell
       key={tenant.tenant_id}
       profile={profile.data}
       tenant={tenant}
@@ -325,9 +343,9 @@ createRoot(document.getElementById("root")!).render(
     theme={{
       token: {
         colorPrimary: "#256b5e",
-        borderRadius: 8,
+        borderRadius: 6,
         fontFamily: 'Inter, "Microsoft JhengHei", "PingFang TC", sans-serif',
-        colorBgLayout: "#f5f6f3",
+        colorBgLayout: "#fbfcfa",
       },
     }}
   >

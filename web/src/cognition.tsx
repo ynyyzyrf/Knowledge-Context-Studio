@@ -223,7 +223,7 @@ export function Cognition() {
                     <Alert
                       className="section-note"
                       type="info"
-                      message="引擎發布尚未接通；「待發布」記憶不會被視為可檢索內容。"
+                      message="背景任務完成引擎索引後，記憶才會變為有效；待發布、停用及刪除內容均不會回傳給外部 Agent。"
                     />
                     <Table
                       rowKey="id"
@@ -258,7 +258,33 @@ export function Cognition() {
                         {
                           title: "引擎處理",
                           render: (_, m) => (
-                            <Status value={m.publication.state} />
+                            <>
+                              <Status value={m.publication.state} />
+                              {m.publication.error_code && (
+                                <p className="muted">
+                                  {m.publication.error_code}
+                                </p>
+                              )}
+                              {m.publication.state === "failed" && (
+                                <Button
+                                  onClick={() =>
+                                    forms.open({
+                                      title: "重試發布任務？",
+                                      fields: [],
+                                      note: "將重新同步目前版本；停用或刪除記憶會重試引擎清理。",
+                                      submit: () =>
+                                        write(
+                                          `/memories/${m.id}/publication/retry`,
+                                          "POST",
+                                          { expected_version: m.version },
+                                        ),
+                                    })
+                                  }
+                                >
+                                  重試發布
+                                </Button>
+                              )}
+                            </>
                           ),
                         },
                         {

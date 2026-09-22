@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Alert, Button, Card, Input, Select, Space, Table, Tag } from "antd";
 import { ApiError, request } from "./api";
+import { ContextReader } from "./context";
 import {
   Heading,
   Load,
@@ -222,6 +223,13 @@ export function Developer() {
       </Card>
       {connected && (
         <>
+          <ContextReader
+            key={scope}
+            token={token}
+            scope={scope}
+            machine={machine.data!}
+            subjects={subjects.data?.items || []}
+          />
           <div className="debug-grid">
             <Card
               title="會話"

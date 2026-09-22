@@ -186,6 +186,110 @@ def test_person_space_visibility_requires_explicit_grant(app):
         assert viewer.get(base + f"/spaces/{space['id']}").status_code == 404
 
 
+def test_space_description_update_and_stats(app):
+    with TestClient(app) as admin:
+        tenant = admin_login(admin)
+        agent, _, _ = setup_agent(admin, tenant)
+        base = f"/v1/tenants/{tenant}"
+        space = create(admin, base + "/spaces", {"name": "DaoStore", "description": "交付知識"})
+        assert space["description"] == "交付知識"
+        assert (
+            admin.put(base + f"/spaces/{space['id']}/agents/{agent['id']}", json={"active": True}).status_code
+            == 200
+        )
+        updated = admin.patch(
+            base + f"/spaces/{space['id']}", json={"name": "DaoStore", "description": "交付與方案知識"}
+        )
+        assert updated.status_code == 200, updated.text
+        assert updated.json()["description"] == "交付與方案知識"
+        listing = admin.get(base + "/spaces").json()["items"][0]
+        assert listing["description"] == "交付與方案知識"
+        assert listing["agent_count"] == 1
+        assert listing["document_count"] == 0
+        assert listing["memory_count"] == 0
+        detail = admin.get(base + f"/spaces/{space['id']}").json()
+        assert detail["agent_count"] == 1
+        assert "last_activity_at" in detail
+
+
+def test_space_context_tree_lists_resources_and_subjects(app):
+    with TestClient(app) as admin:
+        tenant = admin_login(admin)
+        agent, subject, _ = setup_agent(admin, tenant)
+        base = f"/v1/tenants/{tenant}"
+        space = create(admin, base + "/spaces", {"name": "K"})
+        assert admin.put(base + f"/spaces/{space['id']}/agents/{agent['id']}", json={"active": True}).status_code == 200
+        context = admin.get(base + f"/spaces/{space['id']}/context").json()
+        assert [a["agent_id"] for a in context["agents"]] == [agent["id"]]
+        assert [s["id"] for s in context["subjects"]] == [subject["id"]]
+        assert context["subjects"][0]["agent_name"] == "Support"
+        assert context["subjects"][0]["memory_count"] == 0
+        assert context["subjects"][0]["session_count"] == 0
+        assert context["categories"] == []
+
+
+def test_space_search_returns_only_verified_chunks(app):
+    from kcs.models import Document, DocumentChunk
+
+    class FakeEngine:
+        def __init__(self):
+            self.hits = []
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def find(self, root, query, limit):
+            return self.hits
+
+    engine = FakeEngine()
+    with TestClient(app) as admin:
+        app.state.context_engine_factory = lambda: engine
+        tenant = admin_login(admin)
+        base = f"/v1/tenants/{tenant}"
+        agent, _, _ = setup_agent(admin, tenant)
+        space = create(admin, base + "/spaces", {"name": "K"})
+        assert admin.put(base + f"/spaces/{space['id']}/agents/{agent['id']}", json={"active": True}).status_code == 200
+        person_id = admin.get(base + "/members").json()["items"][0]["person_id"]
+        with app.state.database.sessions.begin() as db:
+            document = Document(
+                tenant_id=tenant,
+                space_id=space["id"],
+                filename="product/spec.md",
+                checksum="a" * 64,
+                byte_size=48,
+                uploaded_by=person_id,
+                state="succeeded",
+                chunk_count=1,
+                request_id="test",
+            )
+            db.add(document)
+            db.flush()
+            db.add(
+                DocumentChunk(
+                    tenant_id=tenant,
+                    space_id=space["id"],
+                    document_id=document.id,
+                    number=0,
+                    content="支援時間為 09:00 到 18:00。",
+                )
+            )
+            document_id = document.id
+        endpoint = base + f"/spaces/{space['id']}/search"
+        root = f"viking://resources/kcs-spaces/{tenant}/{space['id']}"
+        engine.hits = [(f"{root}/{document_id}/v1-c0.md", 0.92), (f"{root}/deadbeef/v1-c0.md", 0.88)]
+        response = admin.post(endpoint, json={"query": "支援時間"})
+        assert response.status_code == 200, response.text
+        items = response.json()["items"]
+        assert [item["document_id"] for item in items] == [document_id]
+        assert items[0]["content"] == "支援時間為 09:00 到 18:00。"
+        assert items[0]["filename"] == "product/spec.md"
+        engine.hits = []
+        assert admin.post(endpoint, json={"query": "支援時間"}).json()["items"] == []
+
+
 def test_expired_credential_and_disabled_tenant_fail(app):
     from sqlalchemy import update
 

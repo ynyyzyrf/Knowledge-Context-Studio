@@ -1,0 +1,19 @@
+name: kcs-v1
+services:
+  engine:
+    # Locally built native image, pinned to OpenViking 20ec78a149a0889a85b038627dddc70b46dceae3.
+    image: sha256:de1a4377bdde45814ff92342735c2acfc6408b098dd78fac4048bc92519d817b
+    entrypoint: /app/.venv/bin/python
+    working_dir: /data
+    command: ["-I", "-m", "openviking_cli.server_bootstrap", "--config", "/config/ov.conf"]
+    environment:
+      OPENVIKING_CONFIG_FILE: /config/ov.conf
+    ports: ["127.0.0.1:19388:1933"]
+    volumes:
+      - ./runtime/engine.json:/config/ov.conf:ro
+      - engine_data:/data
+    restart: unless-stopped
+    cpus: 2
+    mem_limit: 4g
+volumes:
+  engine_data:

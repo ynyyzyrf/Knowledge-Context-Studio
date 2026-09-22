@@ -92,8 +92,37 @@ export function Status({ value }: { value: string }) {
     </Tag>
   );
 }
+const tone: Record<string, string> = {
+  ready: "var(--ok)",
+  succeeded: "var(--ok)",
+  active: "var(--ok)",
+  failed: "var(--bad)",
+  deleted: "var(--bad)",
+  pending: "var(--warn)",
+  retry: "var(--warn)",
+  candidate: "var(--warn)",
+  running: "var(--warn)",
+};
+export function Dot({ value }: { value: string }) {
+  return (
+    <span className="status-dot">
+      <i style={{ background: tone[value] || "#b6bfb8" }} />
+      {labels[value] || value}
+    </span>
+  );
+}
 export const when = (value: number) =>
   new Date(value * 1000).toLocaleString("zh-TW");
+export const ago = (value?: number | null) => {
+  if (!value) return "—";
+  const diff = Date.now() / 1000 - value;
+  if (diff < 60) return "剛剛";
+  if (diff < 3600) return `${Math.floor(diff / 60)} 分鐘前`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)} 小時前`;
+  if (diff < 172800) return "昨天";
+  if (diff < 7 * 86400) return `${Math.floor(diff / 86400)} 天前`;
+  return new Date(value * 1000).toLocaleDateString("zh-TW");
+};
 export const short = (value: string) => value.slice(0, 8);
 export function Heading({
   title,

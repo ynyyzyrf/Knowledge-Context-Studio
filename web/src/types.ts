@@ -14,7 +14,41 @@ export interface Entity {
   active: boolean;
 }
 export interface Space extends Entity {
+  description: string;
   sync_state: string;
+  document_count?: number;
+  agent_count?: number;
+  memory_count?: number;
+  last_activity_at?: number | null;
+}
+export interface SpaceCategory {
+  key: string;
+  document_count: number;
+  chunk_count: number;
+  recent: { id: string; filename: string; created_at: number }[];
+}
+export interface SpaceSubject {
+  id: string;
+  name: string;
+  active: boolean;
+  agent_id: string;
+  agent_name: string;
+  memory_count: number;
+  session_count: number;
+}
+export interface SpaceContext {
+  space: Space;
+  agents: { agent_id: string; agent_name: string; agent_active: boolean }[];
+  categories: SpaceCategory[];
+  subjects: SpaceSubject[];
+}
+export interface SearchHit {
+  document_id: string;
+  filename: string;
+  chunk: number;
+  page: number | null;
+  content: string | null;
+  score: number;
 }
 export interface Person {
   person_id: string;
