@@ -7,7 +7,16 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .auth_routes import StrictModel
-from .models import Agent, AgentCredential, AuditEvent, CredentialSubject, Subject, Tenant
+from .models import (
+    Agent,
+    AgentCredential,
+    AgentSpaceGrant,
+    AuditEvent,
+    CredentialSubject,
+    KnowledgeSpace,
+    Subject,
+    Tenant,
+)
 from .policy import AgentAuth, agent_auth, allowed_space_ids, allowed_subject_ids, scoped_object
 from .security import PersonAuth, digest, get_db, person_auth, tenant_membership
 
@@ -29,6 +38,27 @@ class CredentialInput(StrictModel):
 
 def public_entity(obj):
     return {"id": obj.id, "name": obj.name, "active": obj.active}
+
+
+def mcp_package(request, credential, token):
+    base_url = str(request.app.state.settings.public_origin).rstrip("/")
+    return {
+        "baseUrl": base_url,
+        "credentialId": credential.id,
+        "token": token,
+        "expiresAt": credential.expires_at,
+        "mcpServer": {
+            "mag-kb": {
+                "command": "node",
+                "args": ["<MAG_KB_MCP_ROOT>/server.mjs"],
+                "env": {
+                    "MAG_KB_BASE_URL": base_url,
+                    "MAG_KB_TOKEN": token,
+                },
+            }
+        },
+        "env": f'MAG_KB_BASE_URL="{base_url}"\nMAG_KB_TOKEN="{token}"',
+    }
 
 
 def record(db, request, auth, tenant_id, action, target_id, details=None):
@@ -53,10 +83,14 @@ def subject_for_agent(db, tenant_id, agent_id, subject_id):
     return subject
 
 
-def issue_credential(db, tenant_id, agent_id, subject_ids, expires_at):
+def issue_credential(db, tenant_id, agent_id, subject_ids, expires_at, namespace_person_id=None):
     token = "kcs_" + secrets.token_urlsafe(32)
     credential = AgentCredential(
-        tenant_id=tenant_id, agent_id=agent_id, token_hash=digest(token), expires_at=expires_at
+        tenant_id=tenant_id,
+        agent_id=agent_id,
+        token_hash=digest(token),
+        expires_at=expires_at,
+        namespace_person_id=namespace_person_id,
     )
     db.add(credential)
     db.flush()
@@ -77,6 +111,54 @@ def machine_identity(auth: AgentAuth = Depends(agent_auth), db: Session = Depend
         "credential_id": auth.credential_id,
         "subject_ids": allowed_subject_ids(db, auth),
         "space_ids": allowed_space_ids(db, auth),
+    }
+
+
+@router.get("/agent/subjects")
+def machine_subjects(auth: AgentAuth = Depends(agent_auth), db: Session = Depends(get_db)):
+    ids = allowed_subject_ids(db, auth)
+    rows = db.scalars(
+        select(Subject)
+        .where(
+            Subject.tenant_id == auth.tenant_id,
+            Subject.agent_id == auth.agent_id,
+            Subject.id.in_(ids),
+        )
+        .order_by(Subject.id)
+    )
+    return {"items": [public_entity(row) for row in rows]}
+
+
+@router.get("/agent/spaces")
+def machine_spaces(auth: AgentAuth = Depends(agent_auth), db: Session = Depends(get_db)):
+    ids = allowed_space_ids(db, auth)
+    rows = db.scalars(
+        select(KnowledgeSpace)
+        .join(
+            AgentSpaceGrant,
+            (AgentSpaceGrant.space_id == KnowledgeSpace.id)
+            & (AgentSpaceGrant.tenant_id == KnowledgeSpace.tenant_id),
+        )
+        .where(
+            KnowledgeSpace.tenant_id == auth.tenant_id,
+            KnowledgeSpace.id.in_(ids),
+            AgentSpaceGrant.agent_id == auth.agent_id,
+            AgentSpaceGrant.active.is_(True),
+            KnowledgeSpace.active.is_(True),
+        )
+        .order_by(KnowledgeSpace.id)
+    )
+    return {
+        "items": [
+            {
+                "id": row.id,
+                "name": row.name,
+                "description": row.description or "",
+                "active": row.active,
+                "sync_state": row.sync_state,
+            }
+            for row in rows
+        ]
     }
 
 
@@ -218,10 +300,15 @@ def create_credential(
         if not subject_for_agent(db, tenant_id, agent_id, subject_id).active:
             raise HTTPException(404, "找不到服務對象")
     credential, token = issue_credential(
-        db, tenant_id, agent_id, body.subject_ids, time.time() + body.expires_in_days * 86400
+        db, tenant_id, agent_id, body.subject_ids, time.time() + body.expires_in_days * 86400, auth.person.id
     )
     record(db, request, auth, tenant_id, "credential.created", credential.id)
-    return {"id": credential.id, "token": token, "expires_at": credential.expires_at}
+    return {
+        "id": credential.id,
+        "token": token,
+        "expires_at": credential.expires_at,
+        "mcp": mcp_package(request, credential, token),
+    }
 
 
 def owned_credential(db, tenant_id, agent_id, credential_id):
@@ -244,6 +331,8 @@ def rotate(
     tenant_membership(db, tenant_id, auth, admin=True)
     agent = scoped_object(db, Agent, tenant_id, agent_id)
     old = owned_credential(db, tenant_id, agent_id, credential_id)
+    if old.namespace_person_id and old.namespace_person_id != auth.person.id:
+        raise HTTPException(403, "只有綁定使用者可以輪替私人 namespace 憑證；可撤銷後重新簽發自己的憑證")
     if not agent.active or old.revoked_at is not None or old.expires_at <= time.time():
         raise HTTPException(409, "憑證已失效，請重新簽發")
     scope = list(
@@ -253,10 +342,17 @@ def rotate(
             )
         )
     )
-    credential, token = issue_credential(db, tenant_id, agent_id, scope, old.expires_at)
+    credential, token = issue_credential(
+        db, tenant_id, agent_id, scope, old.expires_at, old.namespace_person_id
+    )
     old.revoked_at = time.time()
     record(db, request, auth, tenant_id, "credential.rotated", old.id, {"replacement_id": credential.id})
-    return {"id": credential.id, "token": token, "expires_at": credential.expires_at}
+    return {
+        "id": credential.id,
+        "token": token,
+        "expires_at": credential.expires_at,
+        "mcp": mcp_package(request, credential, token),
+    }
 
 
 @router.delete("/tenants/{tenant_id}/agents/{agent_id}/credentials/{credential_id}", status_code=204)

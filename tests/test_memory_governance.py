@@ -146,3 +146,47 @@ def test_rejected_candidate_cannot_be_approved(app):
             )
             assert event.details["reason"] == "Not a durable fact"
         assert admin.post(endpoint + "/approve", json={"expected_version": 2}).status_code == 409
+
+
+def test_cognition_paginates_lists_independently_with_scoped_totals(app):
+    with TestClient(app) as admin, TestClient(app) as machine:
+        tenant, agent, subject, message, first = staged(app, admin, machine)
+        base = f"/v1/tenants/{tenant}"
+        with app.state.database.sessions() as db:
+            original = db.get(MemoryCandidate, first)
+            original.created_at = 100
+            ids = [first]
+            for number in range(1, 23):
+                candidate = MemoryCandidate(
+                    tenant_id=tenant, agent_id=agent["id"], subject_id=subject["id"],
+                    job_id=original.job_id, ordinal=number, content=f"Fact {number}",
+                    source_message_ids=[message["id"]], created_at=100 + number,
+                )
+                db.add(candidate)
+                db.flush()
+                ids.append(candidate.id)
+            db.commit()
+        for candidate_id in ids[:12]:
+            response = admin.post(base + f"/candidates/{candidate_id}/approve", json={"expected_version": 1})
+            assert response.status_code == 202
+        # Another subject's candidate must not affect either total or page contents.
+        staged(app, admin, machine)
+        endpoint = base + f"/agents/{agent['id']}/subjects/{subject['id']}/cognition"
+        first_page = admin.get(endpoint, params={"limit": 10}).json()
+        assert first_page["candidates_total"] == 23
+        assert first_page["memories_total"] == 12
+        assert len(first_page["candidates"]) == len(first_page["memories"]) == 10
+        second = admin.get(endpoint, params={"limit": 10, "candidates_offset": 10, "memories_offset": 0}).json()
+        assert second["memories"] == first_page["memories"]
+        assert not ({c["id"] for c in first_page["candidates"]} & {c["id"] for c in second["candidates"]})
+        last = admin.get(endpoint, params={"limit": 10, "candidates_offset": 20, "memories_offset": 10}).json()
+        assert len(last["candidates"]) == 3 and len(last["memories"]) == 2
+        assert {c["id"] for page in [first_page, second, last] for c in page["candidates"]} == set(ids)
+        legacy = admin.get(endpoint, params={"limit": 10, "offset": 10}).json()
+        assert legacy["candidates"] == second["candidates"]
+        assert legacy["memories"] == last["memories"]
+        empty = admin.get(endpoint, params={"limit": 10, "offset": 30}).json()
+        assert empty["candidates"] == empty["memories"] == []
+        assert empty["candidates_total"] == 23 and empty["memories_total"] == 12
+        assert admin.get(endpoint, params={"candidates_offset": -1}).status_code == 422
+        assert admin.get(endpoint, params={"memories_offset": -1}).status_code == 422

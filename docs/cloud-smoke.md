@@ -1,6 +1,6 @@
 # 雲端試運行與外部 Agent 冒煙驗收
 
-狀態：2026-09-22 已核對本機實作；尚未取得目標雲端環境，未部署、未執行雲端測試。Docker 配置與操作步驟已另見 [Docker 統一部署指南](docker-deployment.md)。
+狀態：2026-09-22 已透過 Zeabur 部署平台與 worker，沿用既有 PostgreSQL。固定版本 OpenViking 已部署成功；外部 API 原文寫入、去重、真實模型抽取、記憶與文件索引讀回、引擎重啟持久性、撤權及清理均通過。完整證據見 [雲端部署驗收](evidence/zeabur-deployment-acceptance.md)。這是 HTTP 測試客戶端驗證，尚非本地 Hermes 接入。雲端設定見 [Zeabur 部署指南](zeabur-deployment.md)；自管 Docker 操作見 [Docker 統一部署指南](docker-deployment.md)。
 
 ## 部署前需完成
 
@@ -11,7 +11,7 @@
 1. 固定版本引擎映像的建置／分發，並確認架構相容。不可把本機 image ID 當作可從 registry 拉取的遠端映像。
 2. 前端建置、API 和 worker 的持續運行方式，以及資料庫遷移與管理員初始化。
 3. 公開入口與 `KCS_PUBLIC_ORIGIN` 一致；使用 HTTPS 時設 `KCS_SECURE_COOKIES=true`。資料庫與引擎維持私有。
-4. 容器部署時明確處理服務地址：現有設定僅接受 loopback HTTP 引擎或 HTTPS 引擎，不能直接把 `http://engine:1933` 當成已支援的配置。
+4. 容器部署時明確處理服務地址：私有 HTTP 引擎須同時設定精確的 `KCS_ENGINE_HTTP_ALLOWED_ORIGIN`，不得只填寫 `KCS_ENGINE_URL`。
 5. 在雲端獨立設定聊天／向量服務，驗證可達性與實際向量索引；不直接複製本機帳號、Cookie、金鑰及驗收資料。
 6. 使用獨立試運行資料與持久卷；確認重啟後資料仍存在。完整災難恢復與正式上線驗收另行完成。
 

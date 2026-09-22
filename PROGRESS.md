@@ -6,7 +6,16 @@
 
 目標是供內部團隊使用、可上生產的知識與記憶平台。Agent 在外部執行；平台負責身份、空間授權、知識匯入、記憶治理及上下文讀回。下列狀態來自已保存的驗收紀錄，不代表服務即時健康狀態。
 
+## 2026-09-22 文件閱讀分頁（本地，未推送）
+
+- 文件詳情分為基本信息（元資料與可讀 Agent）、概覽信息（按需模型摘要）、完整信息（全文）。
+- TXT／Markdown 讀取已驗證的原文；PDF 合併全部解析片段、去除同頁重疊並保留頁碼，不還原圖片或版面。
+- 摘要覆蓋整份文件，長文件分段後整合；目前保留於當次閱讀，不落庫。模型失敗顯示可重試錯誤，生成完成後重查登入、空間權限與文件刪除狀態。
+- 推送前 PostgreSQL 全量測試 74 項通過、3 項跳過；前端 6 項通過，正式構建通過（既有 bundle 體積提示仍在）。本地 README 實際生成摘要，1440／390 寬度完成三分頁切換與溢出檢查；未部署雲端。
+
 ## 功能進度
+
+先理解整體分工：[互動系統架構圖](docs/architecture/system-overview.html)。區分 API、worker、資料庫、索引引擎，以及本地 Hermes；雲端已建立／待補服務以圖下說明為準。
 
 | 項目 | 目前狀態 | 已交付／已驗證 | 剩餘工作 |
 | --- | --- | --- | --- |
@@ -23,7 +32,7 @@
 
 ## 下一步與完成標準
 
-當前準備：騰訊雲試運行與本地 Hermes 接入。已新增 [Docker 統一部署配置與指南](docs/docker-deployment.md)，通過本機 Linux 容器啟動、索引／讀回與外部訊息寫入冒煙，並匯出離線映像包；[證據與限制](docs/evidence/docker-deployment-acceptance.md)。仍待目標伺服器條件，尚未執行騰訊雲部署或 Hermes 接入。
+當前執行：透過 Zeabur CLI 部署到既有騰訊雲 Jakarta 專案。平台、PostgreSQL 與 worker 已運行；公開 HTTPS、管理員登入、外部 Agent 原文寫入／讀回／去重、真實模型抽取及 1024 維向量服務已通過。固定版本 OpenViking 修正來源缺檔及 Docker 偵測後已部署成功；記憶／文件索引讀回、引擎重啟持久性、空間撤權、內容及向量清理、憑證撤銷均已通過雲端冒煙。本地 Hermes 尚未接入。設定見 [Zeabur 部署指南](docs/zeabur-deployment.md)，進度證據見 [Zeabur 雲端驗收](docs/evidence/zeabur-deployment-acceptance.md)。先前本機 Docker 證據見 [Docker 驗收](docs/evidence/docker-deployment-acceptance.md)。
 
 依目前依賴順序排列；尚未承諾日期。
 
@@ -35,6 +44,21 @@
 DOCX／OCR 等格式擴充另列需求，不取代上述生產驗收工作。
 
 ## 最近驗證證據
+
+2026-09-22 Taste Skill 前端優化（本機，未推送）：沿用 React＋Ant Design，統一自託管中英文字體、導航、頁面層級、空間卡片、文件閱讀、表格／表單／頁籤，新增單檔拖曳上傳區、骨架載入、鍵盤焦點及私人／共享目錄快捷入口。前端 6 passed、正式建置及 diff check 通過；主要頁面 1440／1024／390px 檢查無整頁橫向溢出，新上傳控制項已跑通真實私人文件上傳與索引。範圍及截圖見 [UI 設計與驗證](docs/ui-design.md)。
+
+2026-09-22 個人 namespace 與上傳路徑（本機實作與驗證，未提交／推送）：`user/default` 由登入使用者解析，不再由 Subject 推導。固定個人目錄與 Space 共享 resources；新上傳預設私人、可建巢狀目錄，明確選擇才共享。私人文件的目錄、列表、計數、預覽、搜尋及索引按 Person＋Space 隔離；Agent 需要使用者綁定 Token、Space ACL 及私人 resources grant，返回前重驗授權。既有共享文件與未綁定 Token 保持原義。詳見 [Context namespace 規格與邊界](docs/context-namespaces.md)。
+
+驗證：PostgreSQL 全套 **71 passed／3 skipped**；前端 **6 passed**、正式建置、Ruff、diff check 與 Alembic schema check 通過。本機真實瀏覽器建立 `test`、上傳、完成索引與原文顯示；真實引擎驗證私人搜尋及 `/v1/context` 讀回、撤權拒絕。390px 檢查無整頁橫向溢出。測試文件已刪除、临時 Agent／Token 已停用／撤銷，留下空的私人 test 目錄供操作。截圖：工作區 `output/playwright/private-namespace-desktop.png` 與 `private-namespace-mobile.png`。
+
+明確未完成：個人 memories／peers／privacy／sessions／skills 的資料寫入與讀回、普通成員簽發私人 Token。上述節點顯示尚未接入；既有 Agent＋Subject 記憶仍在原治理功能，未遷移或假冒成 Space 個人記憶。指定 `space_ids` 的 Agent 搜尋不混入舊 Subject 記憶；省略時保留舊模型相容。雲端未更新。
+
+
+2026-09-22 文件概覽改為資料夾瀏覽器（本機修改，未提交／推送）：可展開目錄、篩選目錄及近期文件、選取高亮、路徑複製、概覽／詳細閱讀卡片、文件正文與片段翻頁；窄螢幕顯示閱讀區。沿用既有授權接口。前端 6 passed、建置與 diff check 通過；瀏覽器使用合成接口回應驗證搜尋、文件閱讀、片段翻頁、重新載入與 390px 無整頁橫向溢出。範圍：每分類最近 5 份文件；memories／sessions 為目錄統計，L0／L1 引擎摘要未接入。截圖保存在工作區 output/playwright/context-browser-desktop.png。
+
+2026-09-22 記憶治理分頁（本機完成，依使用者要求暫不推送）：候選／記憶各自以 10 筆分頁，表格上下顯示頁碼與總數；切換 Agent／Subject 重設頁碼。API 新增獨立 offset 與範圍內總數，保留舊 offset 相容。後端治理測試 5 passed、Ruff 與前端建置通過；瀏覽器以 23 候選／12 記憶的模擬回應驗證翻頁、末頁及頁碼保留，未修改雲端資料。Subject 切換重設已實作；瀏覽器驗證因選單定位失敗而未完成，不列為已通過。
+
+2026-09-22 空間上傳／授權頁排版修正 `2c2712a`：改用完整內容區，移除重複詳情欄，文件分頁按鈕可換行。前端建置與 6 項測試通過；瀏覽器以本機建置連接雲端 API，驗證 1440／1024／390px 無頁面溢出，概覽保留三欄。Zeabur 部署 `6ab21600c71834649e111b37` 已 RUNNING；取消本機資產替換後重新載入雲端版本，桌面內容區 1208px、無溢出，線上修正已生效。
 
 2026-09-22 遠端提交前重新驗證：PostgreSQL 全套 **65 passed／3 skipped**（86.05 秒）；前端 **6 passed**、正式建置通過；Ruff 通過、Alembic 無 schema drift。已檢查待提交檔案及歷史中的常見秘密格式，並核對本機現用秘密未出現在待提交內容。此次沒有重新呼叫真實模型。
 

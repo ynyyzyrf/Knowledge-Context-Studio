@@ -1,3 +1,14 @@
+import "@fontsource-variable/manrope";
+import "@fontsource-variable/noto-sans-tc";
+import {
+  AppstoreOutlined,
+  ApiOutlined,
+  TeamOutlined,
+  HistoryOutlined,
+  SettingOutlined,
+  LogoutOutlined,
+  BookOutlined,
+} from "@ant-design/icons";
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
@@ -36,6 +47,7 @@ import { Agents, Spaces, Members, AuditPage } from "./pages";
 import { Settings } from "./settings";
 import { SpaceStudio } from "./studio";
 import "./style.css";
+import "./ui-polish.css";
 const client = new QueryClient({
   defaultOptions: {
     queries: { staleTime: 10000, refetchOnWindowFocus: false, retry: false },
@@ -49,7 +61,7 @@ function Login() {
     <div className="login">
       <section className="login-story">
         <div className="brand">
-          <span>K</span> KNOWLEDGE CONTEXT STUDIO
+          <span>C</span> Context Studio
         </div>
         <h1>
           知識有來源。
@@ -67,9 +79,7 @@ function Login() {
       </section>
       <section className="login-form">
         <div>
-          <span className="eyebrow">團隊工作台</span>
           <h2>登入你的工作空間</h2>
-          <p className="muted">使用管理員為你開通的帳號。</p>
           {error ? <Problem error={error} /> : null}
           <Form
             layout="vertical"
@@ -120,9 +130,6 @@ function Login() {
               登入工作台
             </Button>
           </Form>
-          <p className="login-help">
-            僅供已授權團隊成員使用。首次登入資訊由本機管理員提供。
-          </p>
         </div>
       </section>
     </div>
@@ -174,8 +181,16 @@ function OrgShell({
       type: "group" as const,
       label: "工作區",
       children: [
-        { key: "/spaces", label: "知識空間" },
-        ...(admin ? [{ key: "/agents", label: "外部 Agent 接入" }] : []),
+        { key: "/spaces", label: "知識空間", icon: <AppstoreOutlined /> },
+        ...(admin
+          ? [
+              {
+                key: "/agents",
+                label: "外部 Agent 接入",
+                icon: <ApiOutlined />,
+              },
+            ]
+          : []),
       ],
     },
     {
@@ -183,101 +198,124 @@ function OrgShell({
       type: "group" as const,
       label: "管理",
       children: [
-        { key: "/members", label: "團隊成員" },
-        ...(admin ? [{ key: "/audit", label: "操作紀錄" }] : []),
-        { key: "/settings", label: "設定" },
+        { key: "/members", label: "團隊成員", icon: <TeamOutlined /> },
+        ...(admin
+          ? [{ key: "/audit", label: "操作紀錄", icon: <HistoryOutlined /> }]
+          : []),
+        { key: "/settings", label: "開發者工具", icon: <SettingOutlined /> },
       ],
     },
   ];
   return (
     <Layout className="workspace">
+      <a className="skip-link" href="#main-content">
+        跳至主要內容
+      </a>
       <Layout.Sider
-          breakpoint="lg"
-          onBreakpoint={setNarrow}
-          collapsedWidth={0}
-          collapsed={collapsed}
-          onCollapse={setCollapsed}
-          width={224}
-          theme="light"
-        >
-          <div className="sidebar-brand">
-            <b>K</b>
-            <div>
-              Knowledge Context<span>CONTEXT STUDIO</span>
-            </div>
+        breakpoint="lg"
+        onBreakpoint={setNarrow}
+        collapsedWidth={0}
+        collapsed={collapsed}
+        onCollapse={setCollapsed}
+        width={224}
+        theme="light"
+      >
+        <div className="sidebar-brand">
+          <b>
+            <BookOutlined />
+          </b>
+          <div>
+            Context Studio<span>知識與記憶工作台</span>
           </div>
-          <Menu
-            mode="inline"
-            selectedKeys={["/" + location.pathname.split("/")[1]]}
-            items={items}
-            onClick={({ key }) => {
-              navigate(key);
-              if (narrow) setCollapsed(true);
-            }}
-          />
-        </Layout.Sider>
-        <Layout>
-          <header className="topbar">
-            <div>
-              {profile.memberships.length > 1 && (
-                <Select
-                  aria-label="選擇團隊"
-                  value={tenant.tenant_id}
-                  options={profile.memberships.map((m) => ({
-                    value: m.tenant_id,
-                    label: m.name,
-                  }))}
-                  onChange={async (value) => {
-                    setToken("");
-                    await qc.cancelQueries();
-                    qc.removeQueries({ queryKey: ["tenant"] });
-                    qc.removeQueries({ queryKey: ["machine"] });
-                    onTenant(value);
-                    navigate("/spaces");
-                  }}
-                />
-              )}
-            </div>
-            <Space>
-              <span className="account-email">{profile.person.email}</span>
-              <Button
-                onClick={async () => {
-                  try {
-                    await request("/v1/auth/logout", "POST", undefined, {
-                      csrf: profile.csrf_token,
-                    });
-                    setToken("");
-                    forgetSession(qc);
-                  } catch (e) {
-                    setLogoutError(e);
-                  }
+        </div>
+        <Menu
+          mode="inline"
+          selectedKeys={["/" + location.pathname.split("/")[1]]}
+          items={items}
+          onClick={({ key }) => {
+            navigate(key);
+            if (narrow) setCollapsed(true);
+          }}
+        />
+        <div className="sidebar-account">
+          <span className="account-avatar" aria-hidden="true">
+            {profile.person.email.slice(0, 1).toUpperCase()}
+          </span>
+          <span className="account-email">{profile.person.email}</span>
+        </div>
+      </Layout.Sider>
+      <Layout>
+        <header className="topbar">
+          <div className="topbar-location">
+            <span>工作區</span>
+            <span className="breadcrumb-divider">/</span>
+            <strong>
+              {{
+                "/spaces": "知識空間",
+                "/agents": "外部 Agent 接入",
+                "/members": "團隊成員",
+                "/audit": "操作紀錄",
+                "/settings": "開發者工具",
+              }[location.pathname] || "工作台"}
+            </strong>
+          </div>
+          <div className="topbar-team">
+            {profile.memberships.length > 1 && (
+              <Select
+                aria-label="選擇團隊"
+                value={tenant.tenant_id}
+                options={profile.memberships.map((m) => ({
+                  value: m.tenant_id,
+                  label: m.name,
+                }))}
+                onChange={async (value) => {
+                  setToken("");
+                  await qc.cancelQueries();
+                  qc.removeQueries({ queryKey: ["tenant"] });
+                  qc.removeQueries({ queryKey: ["machine"] });
+                  onTenant(value);
+                  navigate("/spaces");
                 }}
-              >
-                登出
-              </Button>
-            </Space>
-          </header>
-          <main className="content">
-            {logoutError ? <Problem error={logoutError} /> : null}
-            <Routes>
-              <Route path="/spaces" element={<Spaces />} />
-              <Route path="/members" element={<Members />} />
-              <Route path="/settings" element={<Settings />} />
-              {admin && (
-                <>
-                  <Route path="/agents" element={<Agents />} />
-                  <Route path="/audit" element={<AuditPage />} />
-                </>
-              )}
-              <Route path="*" element={<Navigate to="/spaces" replace />} />
-            </Routes>
-          </main>
-          <footer className="workspace-footer">
-            Knowledge Context Studio · 內部版本{" "}
-            <span>Knowledge Space 是知識與 Context 的最高隔離單元</span>
-          </footer>
-        </Layout>
+              />
+            )}
+          </div>
+          <Space>
+            <Button
+              type="text"
+              icon={<LogoutOutlined />}
+              onClick={async () => {
+                try {
+                  await request("/v1/auth/logout", "POST", undefined, {
+                    csrf: profile.csrf_token,
+                  });
+                  setToken("");
+                  forgetSession(qc);
+                } catch (e) {
+                  setLogoutError(e);
+                }
+              }}
+            >
+              登出
+            </Button>
+          </Space>
+        </header>
+        <main id="main-content" className="content">
+          {logoutError ? <Problem error={logoutError} /> : null}
+          <Routes>
+            <Route path="/spaces" element={<Spaces />} />
+            <Route path="/members" element={<Members />} />
+            <Route path="/settings" element={<Settings />} />
+            {admin && (
+              <>
+                <Route path="/agents" element={<Agents />} />
+                <Route path="/audit" element={<AuditPage />} />
+              </>
+            )}
+            <Route path="*" element={<Navigate to="/spaces" replace />} />
+          </Routes>
+        </main>
       </Layout>
+    </Layout>
   );
 }
 function App() {
@@ -347,9 +385,17 @@ createRoot(document.getElementById("root")!).render(
     theme={{
       token: {
         colorPrimary: "#256b5e",
-        borderRadius: 6,
-        fontFamily: 'Inter, "Microsoft JhengHei", "PingFang TC", sans-serif',
-        colorBgLayout: "#fbfcfa",
+        borderRadius: 8,
+        controlHeight: 38,
+        fontSize: 14,
+        colorText: "#243631",
+        colorTextSecondary: "#61716b",
+        colorBorder: "#dce4e0",
+        colorBgContainer: "#ffffff",
+        colorInfo: "#256b5e",
+        colorBgLayout: "#f5f7f6",
+        fontFamily:
+          '"Manrope Variable", "Noto Sans TC Variable", "Microsoft YaHei UI", sans-serif',
       },
     }}
   >

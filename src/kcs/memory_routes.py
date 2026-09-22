@@ -2,7 +2,7 @@ import time
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import Field
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from .agent_routes import record, subject_for_agent
@@ -303,32 +303,34 @@ def cognition(
     db: Session = Depends(get_db),
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=100),
+    candidates_offset: int | None = Query(default=None, ge=0),
+    memories_offset: int | None = Query(default=None, ge=0),
 ):
     tenant_membership(db, tenant_id, auth, admin=True)
     subject_for_agent(db, tenant_id, agent_id, subject_id)
+    candidate_query = select(MemoryCandidate).where(
+        MemoryCandidate.tenant_id == tenant_id,
+        MemoryCandidate.agent_id == agent_id,
+        MemoryCandidate.subject_id == subject_id,
+    )
+    memory_query = select(MemoryRecord).where(
+        MemoryRecord.tenant_id == tenant_id,
+        MemoryRecord.agent_id == agent_id,
+        MemoryRecord.subject_id == subject_id,
+    )
     candidates = db.scalars(
-        select(MemoryCandidate)
-        .where(
-            MemoryCandidate.tenant_id == tenant_id,
-            MemoryCandidate.agent_id == agent_id,
-            MemoryCandidate.subject_id == subject_id,
-        )
-        .order_by(MemoryCandidate.created_at.desc(), MemoryCandidate.id)
-        .offset(offset)
+        candidate_query.order_by(MemoryCandidate.created_at.desc(), MemoryCandidate.id)
+        .offset(candidates_offset if candidates_offset is not None else offset)
         .limit(limit)
     )
     memories = db.scalars(
-        select(MemoryRecord)
-        .where(
-            MemoryRecord.tenant_id == tenant_id,
-            MemoryRecord.agent_id == agent_id,
-            MemoryRecord.subject_id == subject_id,
-        )
-        .order_by(MemoryRecord.updated_at.desc(), MemoryRecord.id)
-        .offset(offset)
+        memory_query.order_by(MemoryRecord.updated_at.desc(), MemoryRecord.id)
+        .offset(memories_offset if memories_offset is not None else offset)
         .limit(limit)
     )
     result = {
+        "candidates_total": db.scalar(select(func.count()).select_from(candidate_query.subquery())),
+        "memories_total": db.scalar(select(func.count()).select_from(memory_query.subquery())),
         "candidates": [
             {
                 "id": c.id,

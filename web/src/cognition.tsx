@@ -21,15 +21,22 @@ import {
   when,
 } from "./shared";
 import type { Candidate, Entity, Items, Memory, Provenance } from "./types";
-import { Pager } from "./pages";
 export function Cognition() {
   const agents = useData<Items<Entity>>("/agents");
   const [agent, setAgent] = useState("");
   const subjects = useData<Items<Entity>>(`/agents/${agent}/subjects`, !!agent);
   const [subject, setSubject] = useState("");
-  const [offset, setOffset] = useState(0);
-  const cognition = useData<{ candidates: Candidate[]; memories: Memory[] }>(
-    `/agents/${agent}/subjects/${subject}/cognition?offset=${offset}&limit=50`,
+  const [candidatePage, setCandidatePage] = useState(1);
+  const [memoryPage, setMemoryPage] = useState(1);
+  const [tab, setTab] = useState("candidates");
+  const pageSize = 10;
+  const cognition = useData<{
+    candidates: Candidate[];
+    memories: Memory[];
+    candidates_total: number;
+    memories_total: number;
+  }>(
+    `/agents/${agent}/subjects/${subject}/cognition?candidates_offset=${(candidatePage - 1) * pageSize}&memories_offset=${(memoryPage - 1) * pageSize}&limit=${pageSize}`,
     !!agent && !!subject,
   );
   const write = useWrite();
@@ -99,7 +106,9 @@ export function Cognition() {
           onChange={(id) => {
             setAgent(id);
             setSubject("");
-            setOffset(0);
+            setCandidatePage(1);
+            setMemoryPage(1);
+            setSource(null);
           }}
         />
         <Select
@@ -113,7 +122,9 @@ export function Cognition() {
           }))}
           onChange={(id) => {
             setSubject(id);
-            setOffset(0);
+            setCandidatePage(1);
+            setMemoryPage(1);
+            setSource(null);
           }}
         />
         {subject && (
@@ -129,6 +140,8 @@ export function Cognition() {
       ) : (
         <Load query={cognition}>
           <Tabs
+            activeKey={tab}
+            onChange={setTab}
             items={[
               {
                 key: "candidates",
@@ -136,7 +149,16 @@ export function Cognition() {
                 children: (
                   <Table
                     rowKey="id"
-                    pagination={false}
+                    pagination={{
+                      current: candidatePage,
+                      pageSize,
+                      total: cognition.data?.candidates_total ?? 0,
+                      showSizeChanger: false,
+                      hideOnSinglePage: false,
+                      position: ["topRight", "bottomRight"],
+                      showTotal: (total) => `共 ${total} 筆`,
+                      onChange: setCandidatePage,
+                    }}
                     dataSource={cognition.data?.candidates}
                     scroll={{ x: 700 }}
                     columns={[
@@ -227,7 +249,16 @@ export function Cognition() {
                     />
                     <Table
                       rowKey="id"
-                      pagination={false}
+                      pagination={{
+                        current: memoryPage,
+                        pageSize,
+                        total: cognition.data?.memories_total ?? 0,
+                        showSizeChanger: false,
+                        hideOnSinglePage: false,
+                        position: ["topRight", "bottomRight"],
+                        showTotal: (total) => `共 ${total} 筆`,
+                        onChange: setMemoryPage,
+                      }}
                       dataSource={cognition.data?.memories}
                       scroll={{ x: 850 }}
                       columns={[
@@ -326,14 +357,6 @@ export function Cognition() {
                 ),
               },
             ]}
-          />
-          <Pager
-            offset={offset}
-            count={Math.max(
-              cognition.data?.candidates.length || 0,
-              cognition.data?.memories.length || 0,
-            )}
-            setOffset={setOffset}
           />
         </Load>
       )}

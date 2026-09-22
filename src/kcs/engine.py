@@ -28,10 +28,21 @@ def space_uri(tenant_id, space_id):
     return f"viking://resources/kcs-spaces/{tenant_id}/{space_id}"
 
 
+def private_space_uri(tenant_id, space_id, person_id):
+    if not all(re.fullmatch(r"[0-9a-f]{32}", x) for x in (tenant_id, space_id, person_id)):
+        raise ValueError("Invalid private namespace identity")
+    return f"viking://resources/kcs-private/{tenant_id}/{space_id}/{person_id}"
+
+
 def document_uri(document, number):
     if not re.fullmatch(r"[0-9a-f]{32}", document.id) or type(number) is not int or number < 0:
         raise ValueError("Invalid document identity")
-    return f"{space_uri(document.tenant_id, document.space_id)}/{document.id}/v1-c{number}.md"
+    root = (
+        private_space_uri(document.tenant_id, document.space_id, document.owner_person_id)
+        if document.owner_person_id
+        else space_uri(document.tenant_id, document.space_id)
+    )
+    return f"{root}/{document.id}/v1-c{number}.md"
 
 
 class OpenViking:

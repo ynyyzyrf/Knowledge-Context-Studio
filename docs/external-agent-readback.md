@@ -30,7 +30,9 @@ with httpx.Client(base_url=os.environ['KCS_URL'],
 
 修改、停用、刪除立即使舊版本不可透過產品 API 讀取。引擎清理是可重試的最終一致流程，會定期重查，不能把一次清理成功當作完整備份抹除。
 
-語意搜尋也包含 Agent 明確獲授權空間中已完成索引的文件。可傳 `space_ids` 選擇最多 10 個授權空間；空陣列表示只查記憶，省略表示使用所有授權空間（超過 10 個須明確選擇，否則 422）。`knowledge_spaces_included` 表示此次包含知識空間搜尋，不表示一定命中。`documents` 帶檔名、版本、空間、片段編號、PDF 頁碼、checksum 與原文。引擎請求前限制空間，請求後重新驗證憑證及授權，再以產品資料庫中的有效文件和精確片段 URI 篩選候選。參見 [文件匯入指南](document-import.md)。
+語意搜尋也包含 Agent 明確獲授權空間中已完成索引的文件。可傳 `space_ids` 選擇最多 10 個授權空間；明確傳入時僅查指定 Space 文件，空陣列為空結果；省略才保留舊 Subject 記憶與所有授權空間（超過 10 個須明確選擇，否則 422）。`knowledge_spaces_included` 表示此次包含知識空間搜尋，不表示一定命中。`documents` 帶檔名、版本、空間、片段編號、PDF 頁碼、checksum 與原文。引擎請求前限制空間，請求後重新驗證憑證及授權，再以產品資料庫中的有效文件和精確片段 URI 篩選候選。參見 [文件匯入指南](document-import.md)。
+
+私人文件還需 Token 的使用者綁定及私人資源授權，詳見 [Context namespace](context-namespaces.md)。舊 Subject 記憶沒有 Space／Person 歸屬，不會放入 `user/default/memories`。
 
 ## 本機私有引擎
 

@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "deliver",
+  "type": "architecture",
+  "input": "D:\\aicoding\\個人知識庫\\studio\\docs\\architecture\\system-overview.archify.json",
+  "output": "D:\\aicoding\\個人知識庫\\studio\\docs\\architecture\\system-overview.html",
+  "specification": {
+    "sha256": "bb6e58a7ad79fe6a084f3e294157a14535ff9d18aecf4bb824d7e4d88a7f4a70",
+    "bytes": 4639
+  },
+  "artifact": {
+    "sha256": "3a5d4aa28f096ac04137883d0586952bef64cd23d34b1fc40640fa1915957090",
+    "bytes": 809715
+  },
+  "validation": {
+    "checksPassed": 9,
+    "checkCount": 9,
+    "compositionProfile": "showcase",
+    "compositionStatus": "pass",
+    "errors": 0,
+    "warnings": 0
+  }
+}

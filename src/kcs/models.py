@@ -100,6 +100,7 @@ class AgentCredential(Base):
         UniqueConstraint("tenant_id", "agent_id", "id"),
     )
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=identifier)
+    namespace_person_id: Mapped[str | None] = mapped_column(ForeignKey("people.id"), nullable=True)
     tenant_id: Mapped[str] = mapped_column(String(32), index=True)
     agent_id: Mapped[str] = mapped_column(String(32), index=True)
     token_hash: Mapped[str] = mapped_column(String(64), unique=True)
@@ -140,6 +141,19 @@ class KnowledgeSpace(Base):
     sync_state: Mapped[str] = mapped_column(String(16), default="pending")
 
 
+class ResourceFolder(Base):
+    __tablename__ = "resource_folders"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "space_id"], ["knowledge_spaces.tenant_id", "knowledge_spaces.id"]
+        ),
+    )
+    tenant_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    space_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    owner_key: Mapped[str] = mapped_column(String(32), primary_key=True, default="", server_default="")
+    path: Mapped[str] = mapped_column(String(500), primary_key=True)
+
+
 class Document(Base):
     __tablename__ = "documents"
     __table_args__ = (
@@ -153,6 +167,8 @@ class Document(Base):
     tenant_id: Mapped[str] = mapped_column(String(32), index=True)
     space_id: Mapped[str] = mapped_column(String(32), index=True)
     filename: Mapped[str] = mapped_column(String(200))
+    owner_person_id: Mapped[str | None] = mapped_column(ForeignKey("people.id"), nullable=True)
+    resource_path: Mapped[str] = mapped_column(String(500), default="", server_default="")
     checksum: Mapped[str] = mapped_column(String(64), index=True)
     byte_size: Mapped[int] = mapped_column(Integer)
     source: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True, deferred=True)
@@ -212,6 +228,22 @@ class PersonSpaceGrant(Base):
     space_id: Mapped[str] = mapped_column(String(32), primary_key=True)
     person_id: Mapped[str] = mapped_column(String(32), primary_key=True)
     level: Mapped[str] = mapped_column(String(16))
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class NamespaceAgentGrant(Base):
+    __tablename__ = "namespace_agent_grants"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "space_id"], ["knowledge_spaces.tenant_id", "knowledge_spaces.id"]
+        ),
+        ForeignKeyConstraint(["tenant_id", "agent_id"], ["agents.tenant_id", "agents.id"]),
+        ForeignKeyConstraint(["tenant_id", "person_id"], ["memberships.tenant_id", "memberships.person_id"]),
+    )
+    tenant_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    space_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    person_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    agent_id: Mapped[str] = mapped_column(String(32), primary_key=True)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
 
 

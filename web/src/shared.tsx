@@ -10,7 +10,7 @@ import {
   Modal,
   Select,
   Space,
-  Spin,
+  Skeleton,
   Tag,
   Typography,
 } from "antd";
@@ -28,9 +28,9 @@ export function useData<T>(
   enabled = true,
   poll: boolean | ((data: T | undefined) => boolean) = false,
 ) {
-  const { tenant } = useWorkspace();
+  const { tenant, profile } = useWorkspace();
   return useQuery({
-    queryKey: ["tenant", tenant.tenant_id, suffix],
+    queryKey: ["tenant", tenant.tenant_id, profile.person.id, suffix],
     queryFn: ({ signal }) =>
       request<T>(`/v1/tenants/${tenant.tenant_id}${suffix}`, "GET", undefined, {
         signal,
@@ -166,8 +166,8 @@ export function Load({
 }) {
   if (query.isPending)
     return (
-      <div className="loading">
-        <Spin tip="載入中" />
+      <div className="loading-skeleton" role="status" aria-label="載入中">
+        <Skeleton active title={{ width: "32%" }} paragraph={{ rows: 4 }} />
       </div>
     );
   if (query.error)

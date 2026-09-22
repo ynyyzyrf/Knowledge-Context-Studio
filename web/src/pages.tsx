@@ -16,6 +16,7 @@ import {
   ArrowRightOutlined,
   ReloadOutlined,
   KeyOutlined,
+  FolderOpenOutlined,
 } from "@ant-design/icons";
 import {
   Blank,
@@ -95,6 +96,12 @@ export function Spaces() {
         }
       />
       <Load query={data}>
+        <div className="collection-heading">
+          <span>
+            所有空間 <b>{data.data?.items.length ?? 0}</b>
+          </span>
+          <span>依空間管理知識與存取權限</span>
+        </div>
         {data.data?.items.length ? (
           <div className="space-grid">
             {data.data.items.map((s) => (
@@ -103,6 +110,9 @@ export function Spaces() {
                 className="space-card"
                 onClick={() => navigate(`/spaces/${s.id}`)}
               >
+                <div className="space-card-symbol" aria-hidden="true">
+                  <FolderOpenOutlined />
+                </div>
                 <header className="space-card-head">
                   <h3>{s.name}</h3>
                   <Dot value={s.sync_state} />
@@ -115,7 +125,7 @@ export function Spaces() {
                     <b>{s.document_count ?? 0}</b> 文件
                   </span>
                   <span>
-                    <b>{s.memory_count ?? 0}</b> Memory
+                    <b>{s.memory_count ?? 0}</b> 記憶
                   </span>
                   <span>
                     <b>{s.agent_count ?? 0}</b> Agent
@@ -493,6 +503,26 @@ function AgentDetail({ agent, close }: { agent: Entity; close: () => void }) {
         >
           {issued?.token}
         </Typography.Paragraph>
+        {issued?.mcp && (
+          <>
+            <h4>Hermes MCP 配置</h4>
+            <Typography.Paragraph
+              className="secret"
+              copyable={{
+                text: JSON.stringify(issued.mcp.mcpServer, null, 2),
+              }}
+            >
+              <pre>{JSON.stringify(issued.mcp.mcpServer, null, 2)}</pre>
+            </Typography.Paragraph>
+            <h4>環境變數</h4>
+            <Typography.Paragraph
+              className="secret"
+              copyable={{ text: issued.mcp.env }}
+            >
+              <pre>{issued.mcp.env}</pre>
+            </Typography.Paragraph>
+          </>
+        )}
         <p>到期：{issued ? when(issued.expires_at) : ""}</p>
       </Modal>
     </Drawer>

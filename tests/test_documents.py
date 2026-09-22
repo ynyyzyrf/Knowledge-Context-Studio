@@ -9,7 +9,7 @@ from kcs.document_worker import run_one
 def upload(client, base, content=b"Project Amber support hours are 09:00 to 18:00.", name="guide.md"):
     return client.post(
         base + "/documents",
-        params={"filename": name},
+        params={"filename": name, "scope": "shared"},
         content=content,
         headers={"Content-Type": "application/octet-stream"},
     )

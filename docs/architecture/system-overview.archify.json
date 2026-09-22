@@ -1,0 +1,212 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "我們的平台：誰接請求，誰在背景工作？",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1380,
+      660
+    ]
+  },
+  "components": [
+    {
+      "id": "human-browser",
+      "type": "frontend",
+      "label": "你使用的管理網頁",
+      "sublabel": "上傳文件、審核記憶",
+      "pos": [
+        45,
+        155
+      ],
+      "size": [
+        215,
+        85
+      ]
+    },
+    {
+      "id": "local-hermes",
+      "type": "external",
+      "label": "本地 Hermes",
+      "sublabel": "你的 Agent，留在電腦上",
+      "tag": "待接入",
+      "pos": [
+        45,
+        420
+      ],
+      "size": [
+        215,
+        85
+      ]
+    },
+    {
+      "id": "platform-api",
+      "type": "backend",
+      "label": "API ＋前端服務",
+      "sublabel": "接請求、驗證身份與權限",
+      "tag": "已建立／待雲端驗收",
+      "pos": [
+        400,
+        155
+      ],
+      "size": [
+        225,
+        85
+      ]
+    },
+    {
+      "id": "product-database",
+      "type": "database",
+      "label": "PostgreSQL",
+      "sublabel": "保存原文、權限與任務",
+      "tag": "已建立／待雲端驗收",
+      "pos": [
+        400,
+        420
+      ],
+      "size": [
+        225,
+        85
+      ]
+    },
+    {
+      "id": "background-worker",
+      "type": "backend",
+      "label": "worker 背景後端",
+      "sublabel": "解析文件、抽記憶、重試",
+      "tag": "Zeabur 待新增",
+      "pos": [
+        760,
+        420
+      ],
+      "size": [
+        225,
+        85
+      ]
+    },
+    {
+      "id": "private-engine",
+      "type": "backend",
+      "label": "OpenViking 引擎",
+      "sublabel": "建立索引、搜尋相關片段",
+      "tag": "Zeabur 待新增",
+      "pos": [
+        760,
+        155
+      ],
+      "size": [
+        225,
+        85
+      ]
+    },
+    {
+      "id": "model-providers",
+      "type": "external",
+      "label": "外部模型服務",
+      "sublabel": "聊天模型 ＋ 向量模型",
+      "pos": [
+        1120,
+        300
+      ],
+      "size": [
+        220,
+        85
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "你的電腦",
+      "wraps": [
+        "human-browser",
+        "local-hermes"
+      ],
+      "pad": 24
+    },
+    {
+      "kind": "region",
+      "label": "同一個 Zeabur 專案：我們的平台",
+      "wraps": [
+        "platform-api",
+        "product-database",
+        "background-worker",
+        "private-engine"
+      ],
+      "pad": 35
+    }
+  ],
+  "connections": [
+    {
+      "from": "human-browser",
+      "to": "platform-api",
+      "label": "HTTPS 管理",
+      "variant": "emphasis"
+    },
+    {
+      "from": "local-hermes",
+      "to": "platform-api",
+      "label": "API 寫入／讀回",
+      "variant": "emphasis"
+    },
+    {
+      "from": "platform-api",
+      "to": "product-database",
+      "label": "保存資料與任務",
+      "labelDy": 40
+    },
+    {
+      "from": "product-database",
+      "to": "background-worker",
+      "label": "領取待辦任務",
+      "variant": "dashed"
+    },
+    {
+      "from": "background-worker",
+      "to": "private-engine",
+      "label": "發布／清理索引"
+    },
+    {
+      "from": "platform-api",
+      "to": "private-engine",
+      "label": "授權範圍內搜尋"
+    },
+    {
+      "from": "background-worker",
+      "to": "model-providers",
+      "label": "抽取候選記憶"
+    },
+    {
+      "from": "private-engine",
+      "to": "model-providers",
+      "label": "文字轉向量"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "API 與 worker 都是我們的後端",
+      "items": [
+        "API 接待請求；worker 處理耗時任務。",
+        "兩者使用同一份程式碼，啟動命令不同。"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "現在已有 2 個服務，還需補 2 個",
+      "items": [
+        "已建立：平台 API／前端、PostgreSQL。",
+        "待補：worker、OpenViking；整體雲端尚未驗收。"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Hermes 只連平台 API",
+      "items": [
+        "平台不內置 Agent；模型服務也不是 Agent。",
+        "圖中箭頭表示主要呼叫／資料流，省略回傳線。"
+      ]
+    }
+  ]
+}

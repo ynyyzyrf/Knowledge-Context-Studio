@@ -1,11 +1,14 @@
+import { CloudUploadOutlined, FileTextOutlined } from "@ant-design/icons";
+import { FolderPicker } from "./folder-picker";
 import { useState } from "react";
 import {
   Alert,
   Button,
   Card,
-  Input,
+  Upload,
   Modal,
   Space,
+  Select,
   Table,
   Typography,
 } from "antd";
@@ -14,6 +17,9 @@ import { Load, Problem, Status, useData, useWrite, when } from "./shared";
 type Document = {
   id: string;
   filename: string;
+  resource_path: string;
+  scope: "private" | "shared";
+  location: string;
   byte_size: number;
   checksum: string;
   state: string;
@@ -23,7 +29,12 @@ type Document = {
   error_code?: string;
   created_at: number;
 };
-type Listing = { items: Document[]; can_edit: boolean; has_more: boolean };
+type Listing = {
+  items: Document[];
+  can_edit: boolean;
+  can_share: boolean;
+  has_more: boolean;
+};
 type Detail = Document & {
   chunks: { number: number; page: number | null; content: string }[];
   has_more: boolean;
@@ -48,6 +59,8 @@ const errors: Record<string, string> = {
 
 export function Documents({ spaceId }: { spaceId: string }) {
   const [offset, setOffset] = useState(0);
+  const [scope, setScope] = useState<"private" | "shared">("private");
+  const [folder, setFolder] = useState("");
   const base = `/spaces/${spaceId}/documents`;
   const data = useData<Listing>(
     `${base}?limit=20&offset=${offset}`,
@@ -77,7 +90,7 @@ export function Documents({ spaceId }: { spaceId: string }) {
     }
   }
   return (
-    <Card title="文件匯入">
+    <Card className="import-panel" title="匯入新文件">
       <Alert
         type="info"
         message="支援 .md、.txt 與文字型 PDF。每檔最多 10 MB、100 頁、200,000 字元；不支援掃描／加密 PDF。索引完成後，已授權的外部 Agent 才能檢索。"
@@ -89,17 +102,68 @@ export function Documents({ spaceId }: { spaceId: string }) {
             direction="vertical"
             style={{ width: "100%", margin: "16px 0" }}
           >
-            <Input
+            <Select
+              aria-label="資料存放範圍"
+              value={scope}
+              disabled={busy}
+              onChange={(next) => {
+                setScope(next);
+                setFolder("");
+              }}
+              options={[
+                { value: "private", label: "私人知識（預設）" },
+                {
+                  value: "shared",
+                  label: "共享知識",
+                  disabled: !data.data?.can_share,
+                },
+              ]}
+            />
+            <FolderPicker
+              key={scope}
+              scope={scope}
+              spaceId={spaceId}
+              value={folder}
+              onChange={setFolder}
+              disabled={busy}
+            />
+            <Upload.Dragger
               key={inputKey}
-              type="file"
+              className="document-dropzone"
               aria-label="選擇匯入文件"
               accept=".md,.txt,.pdf"
+              multiple={false}
+              maxCount={1}
+              showUploadList={false}
               disabled={busy}
-              onChange={(e) => {
-                setFile(e.target.files?.[0]);
+              beforeUpload={(next) => {
+                setFile(next);
                 setError(undefined);
+                return false;
               }}
-            />
+            >
+              <span className="upload-glyph">
+                {file ? <FileTextOutlined /> : <CloudUploadOutlined />}
+              </span>
+              <h3>{file ? file.name : "選擇文件，或拖曳到此處"}</h3>
+              <p>
+                {file
+                  ? `${Math.ceil(file.size / 1024)} KB · 點擊可更換文件`
+                  : "Markdown、TXT、文字型 PDF · 單檔上限 10 MB"}
+              </p>
+            </Upload.Dragger>
+            {file && (
+              <Button
+                type="text"
+                disabled={busy}
+                onClick={() => {
+                  setFile(undefined);
+                  setInputKey((x) => x + 1);
+                }}
+              >
+                移除已選文件
+              </Button>
+            )}
             <Button
               type="primary"
               loading={busy}
@@ -108,7 +172,7 @@ export function Documents({ spaceId }: { spaceId: string }) {
                 if (
                   file &&
                   (await action(
-                    `${base}?filename=${encodeURIComponent(file.name)}`,
+                    `${base}?filename=${encodeURIComponent(file.name)}&folder=${encodeURIComponent(folder)}&scope=${scope}`,
                     "POST",
                     file,
                   ))
@@ -129,6 +193,10 @@ export function Documents({ spaceId }: { spaceId: string }) {
             )}
           </Space>
         )}
+        <div className="collection-heading">
+          <span>匯入紀錄</span>
+          <span>點擊文件名稱預覽內容</span>
+        </div>
         <Table
           rowKey="id"
           size="small"
@@ -144,6 +212,7 @@ export function Documents({ spaceId }: { spaceId: string }) {
                   <Button type="link" onClick={() => setSelected(row.id)}>
                     {name}
                   </Button>
+                  <div className="muted">{row.location}/</div>
                   <div>
                     {Math.ceil(row.byte_size / 1024)} KB · {row.chunk_count}{" "}
                     個片段
@@ -174,7 +243,7 @@ export function Documents({ spaceId }: { spaceId: string }) {
             {
               title: "操作",
               render: (_, row) =>
-                data.data?.can_edit && (
+                (row.scope === "private" || data.data?.can_share) && (
                   <Space>
                     {row.state === "failed" && (
                       <Button

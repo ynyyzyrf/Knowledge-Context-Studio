@@ -2,6 +2,8 @@
 
 登入工作台後，進入「知識空間 → 開啟空間 → 文件匯入」，選擇檔案並按「上傳並建立索引」。列表會更新處理狀態；「已完成」才可供外部 Agent 檢索。點擊檔名可預覽分段原文及 PDF 頁碼。
 
+普通上傳預設存入目前登入者的 `user/default/resources/`，可選擇／建立子目錄；只有明確切換「共享知識」才存入 Space 的 `resources/`。完整權限與遷移說明見 [Context namespace](context-namespaces.md)。
+
 ## 格式和限制
 
 支援 `.md`、`.txt`（UTF-8，可帶 BOM）與可擷取文字的 `.pdf`。不支援 DOCX、掃描 PDF、加密 PDF、遠端 URL、OCR 或附件內嵌執行內容。PDF 只要有一頁沒有可擷取文字就明確拒絕；含空白頁的 PDF 請先移除該頁。
@@ -9,13 +11,13 @@
 - 單檔最多 10 MiB、PDF 100 頁、解析後 200,000 字元、100 個片段；任一超限皆失敗，不靜默截斷。
 - 同一空間最多 1,000 份未刪除文件及 100 MiB 原始檔案。
 - 片段上限 2,400 字元、重疊 200 字元，PDF 保留來源頁碼；目前不做標題或表格語意分段。
-- 檔案不可原地修改；同空間、相同內容及相同解析類別去重。Markdown 與文字使用相同解析器，PDF 使用另一解析器。更換內容會建立新文件；不會覆蓋同名舊檔。
+- 檔案不可原地修改；同空間、同擁有者／共享範圍、同目錄、相同內容及相同解析類別去重。Markdown 與文字使用相同解析器，PDF 使用另一解析器。更換內容會建立新文件；不會覆蓋同名舊檔。
 
 原檔、元資料與任務原子寫入 PostgreSQL；列表／檢索不載入原始二進位資料。解析在一次性子程序執行，逾時 30 秒，記憶體上限 512 MiB；設定限制失敗時停止解析。這是資源隔離，尚非完整作業系統安全沙箱。文字不以 HTML 執行。
 
 ## 權限與生命週期
 
-租戶管理員，或同時具備團隊 editor 角色及空間 editor 授權的人員可以上傳、重試和刪除；viewer 可查看獲授權空間。外部 Agent 憑證不能使用人員上傳 API，只能檢索明確授權空間。
+私人文件由具有空間閱讀權的擁有者管理。共享文件的上傳、重試、刪除限租戶管理員，或同時具備團隊 editor 角色及空間 editor 授權的人員；viewer 可查看獲授權空間的共享資料及自己的私人資料。外部 Agent 憑證不能使用人員上傳 API，只能檢索明確授權空間。
 
 狀態為 `pending → running → succeeded`，暫時引擎故障自動延遲重試，最多三次後 `failed`。失敗可手動重試；格式／編碼等永久錯誤應先修正原檔，再重新上傳。worker 租約到期可由另一 worker 接手；舊持有者不能覆蓋新任務結果。
 
@@ -29,9 +31,11 @@
 
 | 方法 | 路徑 | 用途 |
 | --- | --- | --- |
-| POST | `?filename=guide.md` | 原始檔案 bytes，Content-Type `application/octet-stream`，202 返回持久化任務；不是 multipart |
-| GET | `?limit=20&offset=0` | 文件列表及 `can_edit`、`has_more`；包含刪除墓碑 |
+| POST | `?filename=guide.md&scope=private&folder=test` | 原始檔案 bytes，Content-Type `application/octet-stream`，202 返回持久化任務；scope 預設 private，folder 預設根且非空需先建立；不是 multipart |
+| GET | `?limit=20&offset=0` | 文件列表及 `can_edit`、`can_share`、`has_more`；包含刪除墓碑 |
 | GET | `/{id}?offset=0` | 每次最多 10 個原文片段 |
+| GET | `/{id}/content` | 解析完成後的全部文字 pages；未完成 409、已刪除 410；沿用文件所有者及空間權限 |
+| POST | `/{id}/summary` | 按需調用配置模型，全文分段摘要並整合；返回前重查權限與刪除狀態，摘要不落庫 |
 | POST | `/{id}/retry` | 只允許失敗任務重新排程 |
 | DELETE | `/{id}` | 202，立即阻擋讀取並排程清理 |
 

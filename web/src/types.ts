@@ -22,10 +22,17 @@ export interface Space extends Entity {
   last_activity_at?: number | null;
 }
 export interface SpaceCategory {
+  scope: "private" | "shared";
   key: string;
   document_count: number;
   chunk_count: number;
-  recent: { id: string; filename: string; created_at: number }[];
+  recent: {
+    id: string;
+    filename: string;
+    resource_path?: string;
+    scope?: "private" | "shared";
+    created_at: number;
+  }[];
 }
 export interface SpaceSubject {
   id: string;
@@ -67,6 +74,14 @@ export interface Issued {
   id: string;
   token: string;
   expires_at: number;
+  mcp?: {
+    baseUrl: string;
+    credentialId: string;
+    token: string;
+    expiresAt: number;
+    mcpServer: Record<string, unknown>;
+    env: string;
+  };
 }
 export interface Job {
   id: string;

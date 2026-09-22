@@ -13,3 +13,4 @@ web/dist/
 *.egg-info/
 coverage.xml
 .coverage
+.playwright-cli/

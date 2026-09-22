@@ -1,7 +1,22 @@
+import { PrivateResourceAccess } from "./private-resource-access";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Alert, Button, Input, Tag, Typography } from "antd";
-import { LeftOutlined, PlusOutlined, SearchOutlined } from "@ant-design/icons";
+import { Alert, Button, Input, Tag, Tabs, Typography } from "antd";
+import {
+  LeftOutlined,
+  PlusOutlined,
+  SearchOutlined,
+  FolderOpenOutlined,
+  CloudUploadOutlined,
+  ApiOutlined,
+  BookOutlined,
+} from "@ant-design/icons";
+import {
+  ContextReader,
+  ContextTree,
+  selectionKey,
+  type Selection,
+} from "./context-browser";
 import { Documents } from "./documents";
 import { activeField, roleOptions } from "./pages";
 import {
@@ -22,17 +37,13 @@ import { request } from "./api";
 import type { SearchHit, Space as SpaceType, SpaceContext } from "./types";
 
 type Section = "overview" | "search" | "upload" | "agents";
-type Selection =
-  | { type: "overview" }
-  | { type: "resources" }
-  | { type: "category"; key: string }
-  | { type: "document"; id: string }
-  | { type: "subjects" }
-  | { type: "subject"; id: string };
 
 type DocDetail = {
   id: string;
   filename: string;
+  resource_path: string;
+  location: string;
+  scope: "private" | "shared";
   byte_size: number;
   checksum: string;
   state: string;
@@ -41,6 +52,13 @@ type DocDetail = {
   created_at: number;
   chunks: { number: number; page: number | null; content: string }[];
   has_more: boolean;
+};
+
+const sectionIcons = {
+  overview: <FolderOpenOutlined />,
+  search: <SearchOutlined />,
+  upload: <CloudUploadOutlined />,
+  agents: <ApiOutlined />,
 };
 
 const sectionLabels: Record<Section, string> = {
@@ -67,11 +85,17 @@ export function SpaceStudio({ spaceId }: { spaceId: string }) {
   const wide = section === "upload" || section === "agents";
   return (
     <div className={`studio${wide ? " studio-wide" : ""}`}>
+      <a className="skip-link" href="#studio-content">
+        跳至主要內容
+      </a>
       <aside className="studio-nav">
         <Link className="back-link" to="/spaces">
           <LeftOutlined /> 返回所有空間
         </Link>
         <div className="studio-space">
+          <div className="space-emblem" aria-hidden="true">
+            <BookOutlined />
+          </div>
           <h2>{space.data?.name ?? "…"}</h2>
           <span>Knowledge Space</span>
           {sync && <Dot value={sync} />}
@@ -80,6 +104,7 @@ export function SpaceStudio({ spaceId }: { spaceId: string }) {
           {(Object.keys(sectionLabels) as Section[]).map((key) => (
             <button
               key={key}
+              aria-current={key === section ? "page" : undefined}
               className={key === section ? "active" : ""}
               onClick={() => {
                 setSection(key);
@@ -87,23 +112,26 @@ export function SpaceStudio({ spaceId }: { spaceId: string }) {
                 setHit(null);
               }}
             >
-              {sectionLabels[key]}
+              {sectionIcons[key]}
+              <span>{sectionLabels[key]}</span>
             </button>
           ))}
         </nav>
-        <p className="studio-note">
-          此空間與其他知識空間預設完全隔離：文件、記憶、向量索引與 Agent
-          權限互相獨立。
-        </p>
       </aside>
-      <section className="studio-mid">
-        {sync === "pending" && (
-          <Alert
-            type="info"
-            showIcon
-            message="空間索引同步進行中，完成後文件才會提供給已授權 Agent。"
-          />
-        )}
+      <section id="studio-content" className="studio-mid">
+        <header className="studio-section-heading">
+          <span>知識空間</span>
+          <h1>{sectionLabels[section]}</h1>
+          <p>
+            {section === "overview"
+              ? "瀏覽私人資料與空間共享知識"
+              : section === "upload"
+                ? "選擇保存位置，匯入你的知識資料。"
+                : section === "search"
+                  ? "從此空間的授權資料中查找答案。"
+                  : "管理此空間的外部 Agent 存取權。"}
+          </p>
+        </header>
         {sync === "failed" && (
           <Alert
             type="warning"
@@ -117,6 +145,12 @@ export function SpaceStudio({ spaceId }: { spaceId: string }) {
               context={context.data}
               selection={selection}
               onSelect={pick}
+              onUpload={() => setSection("upload")}
+              onRefresh={() => {
+                void context.refetch();
+                void space.refetch();
+              }}
+              refreshing={context.isFetching}
             />
           </Load>
         )}
@@ -141,13 +175,22 @@ export function SpaceStudio({ spaceId }: { spaceId: string }) {
       {!wide && (
         <section className="studio-detail">
           {section === "overview" && (
-            <DetailPanel
+            <ContextReader
+              onSelect={pick}
+              key={selectionKey(selection)}
               spaceId={spaceId}
               space={space.data}
               context={context.data}
               selection={selection}
-              onSelect={pick}
-            />
+            >
+              <DetailPanel
+                spaceId={spaceId}
+                space={space.data}
+                context={context.data}
+                selection={selection}
+                onSelect={pick}
+              />
+            </ContextReader>
           )}
           {section === "search" &&
             (hit ? (
@@ -159,103 +202,6 @@ export function SpaceStudio({ spaceId }: { spaceId: string }) {
             ))}
         </section>
       )}
-    </div>
-  );
-}
-
-function ContextTree({
-  context,
-  selection,
-  onSelect,
-}: {
-  context?: SpaceContext;
-  selection: Selection;
-  onSelect: (s: Selection) => void;
-}) {
-  const documents =
-    context?.categories.reduce((sum, c) => sum + c.document_count, 0) ?? 0;
-  const cls = (active: boolean) => (active ? "active" : "");
-  return (
-    <div className="ctree">
-      <div className="ctree-root">context://</div>
-      <div className="ctree-branch">
-        <button
-          className={cls(selection.type === "resources")}
-          onClick={() => onSelect({ type: "resources" })}
-        >
-          resources <i>{documents}</i>
-        </button>
-        <ul>
-          {context?.categories.map((c) => (
-            <li key={c.key}>
-              <button
-                className={cls(
-                  selection.type === "category" && selection.key === c.key,
-                )}
-                onClick={() => onSelect({ type: "category", key: c.key })}
-              >
-                {c.key === "general" ? "未分類" : c.key}{" "}
-                <i>{c.document_count}</i>
-              </button>
-              <ul>
-                {c.recent.map((d) => (
-                  <li key={d.id}>
-                    <button
-                      className={
-                        "leaf " +
-                        cls(
-                          selection.type === "document" &&
-                            selection.id === d.id,
-                        )
-                      }
-                      title={d.filename}
-                      onClick={() => onSelect({ type: "document", id: d.id })}
-                    >
-                      {d.filename.split("/").pop()}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </li>
-          ))}
-          {!context?.categories.length && <li className="dim">尚無文件</li>}
-        </ul>
-      </div>
-      <div className="ctree-branch">
-        <button
-          className={cls(selection.type === "subjects")}
-          onClick={() => onSelect({ type: "subjects" })}
-        >
-          subjects <i>{context?.subjects.length ?? 0}</i>
-        </button>
-        <ul>
-          {context?.subjects.map((s) => (
-            <li key={s.id}>
-              <button
-                className={cls(
-                  selection.type === "subject" && selection.id === s.id,
-                )}
-                onClick={() => onSelect({ type: "subject", id: s.id })}
-              >
-                {s.name}
-                {!s.active && <Tag className="mini-tag">停用</Tag>}
-              </button>
-              <ul className="ctree-sub">
-                <li>
-                  memories <i>{s.memory_count}</i>
-                </li>
-                <li>
-                  peers <i>—</i>
-                </li>
-                <li>
-                  sessions <i>{s.session_count}</i>
-                </li>
-              </ul>
-            </li>
-          ))}
-          {!context?.subjects.length && <li className="dim">尚無接入主體</li>}
-        </ul>
-      </div>
     </div>
   );
 }
@@ -314,48 +260,78 @@ function DetailPanel({
     return (
       <div className="detail">
         <h3>resources</h3>
-        <p className="muted">此空間的客觀共享知識，預設對已授權 Agent 唯讀。</p>
+        <p className="muted">
+          {selection.scope === "private"
+            ? "目前登入使用者的私人知識資料。"
+            : "此空間的共享知識。"}
+        </p>
         <dl className="kv">
           <dt>URI</dt>
           <dd>
-            <code>context://resources</code>
+            <code>
+              {selection.scope === "private"
+                ? "user/default/resources"
+                : "resources"}
+            </code>
           </dd>
           <dt>分類數</dt>
-          <dd>{context.categories.length}</dd>
+          <dd>
+            {
+              context.categories.filter(
+                (c) => c.scope === (selection.scope || "shared"),
+              ).length
+            }
+          </dd>
           <dt>文件數</dt>
           <dd>
-            {context.categories.reduce((s, c) => s + c.document_count, 0)}
+            {context.categories
+              .filter((c) => c.scope === (selection.scope || "shared"))
+              .reduce((s, c) => s + c.document_count, 0)}
           </dd>
         </dl>
         <h4>分類</h4>
         <ul className="plain-list">
-          {context.categories.map((c) => (
-            <li key={c.key}>
-              <Button
-                type="link"
-                size="small"
-                onClick={() => onSelect({ type: "category", key: c.key })}
-              >
-                {c.key === "general" ? "未分類" : c.key}
-              </Button>
-              <span className="muted">{c.document_count} 文件</span>
-            </li>
-          ))}
-          {!context.categories.length && <li className="muted">尚無分類</li>}
+          {context.categories
+            .filter((c) => c.scope === (selection.scope || "shared"))
+            .map((c) => (
+              <li key={c.key}>
+                <Button
+                  type="link"
+                  size="small"
+                  onClick={() =>
+                    onSelect({ type: "category", key: c.key, scope: c.scope })
+                  }
+                >
+                  {c.key || "resources（根目錄）"}
+                </Button>
+                <span className="muted">{c.document_count} 文件</span>
+              </li>
+            ))}
+          {!context.categories.filter(
+            (c) => c.scope === (selection.scope || "shared"),
+          ).length && <li className="muted">尚無分類</li>}
         </ul>
       </div>
     );
   if (selection.type === "category" && context) {
-    const category = context.categories.find((c) => c.key === selection.key);
+    const category = context.categories.find(
+      (c) =>
+        c.key === selection.key && c.scope === (selection.scope || "shared"),
+    );
     if (!category) return <Blank text="此分類不存在" />;
     const latest = Math.max(...category.recent.map((d) => d.created_at), 0);
     return (
       <div className="detail">
-        <h3>{category.key === "general" ? "未分類" : category.key}</h3>
+        <h3>{category.key || "resources（根目錄）"}</h3>
         <dl className="kv">
           <dt>URI</dt>
           <dd>
-            <code>context://resources/{category.key}</code>
+            <code>
+              {category.scope === "private"
+                ? "user/default/resources"
+                : "resources"}
+              /{category.key}
+            </code>
           </dd>
           <dt>文件數</dt>
           <dd>{category.document_count}</dd>
@@ -380,13 +356,22 @@ function DetailPanel({
           ))}
         </ul>
         <h4>可讀 Agent</h4>
-        <AgentReaders context={context} />
+        {category.scope === "private" ? (
+          <PrivateResourceAccess spaceId={spaceId} />
+        ) : (
+          <AgentReaders context={context} />
+        )}
       </div>
     );
   }
   if (selection.type === "document")
     return (
-      <DocumentDetail spaceId={spaceId} id={selection.id} context={context} />
+      <DocumentDetail
+        key={selection.id}
+        spaceId={spaceId}
+        id={selection.id}
+        context={context}
+      />
     );
   if (selection.type === "subjects" && context)
     return (
@@ -422,6 +407,30 @@ function DetailPanel({
         </ul>
       </div>
     );
+  if (selection.type === "subject-folder" && context) {
+    const subject = context.subjects.find((s) => s.id === selection.id);
+    if (!subject) return <Blank text="此服務對象不存在" />;
+    return (
+      <div className="detail">
+        <h3>
+          {subject.name} / {selection.folder}
+        </h3>
+        <dl className="kv">
+          <dt>所屬 Agent</dt>
+          <dd>{subject.agent_name}</dd>
+          <dt>{selection.folder === "memories" ? "有效記憶" : "會話數"}</dt>
+          <dd>
+            {selection.folder === "memories"
+              ? subject.memory_count
+              : subject.session_count}
+          </dd>
+        </dl>
+        <p className="muted">
+          此處顯示目錄統計；內容管理請使用設定中的記憶治理或任務中心。
+        </p>
+      </div>
+    );
+  }
   if (selection.type === "subject" && context) {
     const subject = context.subjects.find((s) => s.id === selection.id);
     if (!subject) return <Blank text="此主體不存在" />;
@@ -494,54 +503,147 @@ function DocumentDetail({
   id: string;
   context?: SpaceContext;
 }) {
-  const data = useData<DocDetail>(`/spaces/${spaceId}/documents/${id}`);
+  const [tab, setTab] = useState("basic");
+  const [summary, setSummary] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  const { profile, tenant } = useWorkspace();
+  const path = `/spaces/${spaceId}/documents/${id}`;
+  const data = useData<DocDetail>(path);
+  const content = useData<{
+    pages: { page: number | null; content: string }[];
+  }>(`${path}/content`, tab === "full");
+  const generate = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await request<{ summary: string }>(
+        `/v1/tenants/${tenant.tenant_id}${path}/summary`,
+        "POST",
+        {},
+        { csrf: profile.csrf_token },
+      );
+      setSummary(result.summary);
+    } catch (e) {
+      setError(e);
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
-    <div className="detail">
-      <Load query={data}>
-        <h3 title={data.data?.filename}>{data.data?.filename}</h3>
-        <dl className="kv">
-          <dt>URI</dt>
-          <dd>
-            <code>context://resources/documents/{id.slice(0, 8)}</code>
-          </dd>
-          <dt>狀態</dt>
-          <dd>
-            <Dot
-              value={data.data?.deleted ? "deleted" : data.data?.state || ""}
-            />
-          </dd>
-          <dt>大小</dt>
-          <dd>{data.data ? Math.ceil(data.data.byte_size / 1024) : 0} KB</dd>
-          <dt>索引片段</dt>
-          <dd>{data.data?.chunk_count}</dd>
-          <dt>匯入時間</dt>
-          <dd>{data.data ? when(data.data.created_at) : ""}</dd>
-          <dt>Checksum</dt>
-          <dd>
-            <Typography.Text
-              className="id"
-              copyable={{ text: data.data?.checksum }}
-            >
-              {(data.data?.checksum || "").slice(0, 12)}…
-            </Typography.Text>
-          </dd>
-        </dl>
-        <h4>可讀 Agent</h4>
-        {context && <AgentReaders context={context} />}
-        <h4>摘要（第一個片段）</h4>
-        {data.data?.chunks.map((c) => (
-          <div className="memory-reference" key={c.number}>
-            <strong>
-              片段 {c.number + 1}
-              {c.page ? ` · 第 ${c.page} 頁` : ""}
-            </strong>
-            <p className="memory-text">{c.content}</p>
-          </div>
-        ))}
-        {!data.data?.chunks.length && (
-          <p className="muted">尚未有可顯示片段。</p>
-        )}
-      </Load>
+    <div className="document-detail">
+      <Tabs
+        activeKey={tab}
+        onChange={setTab}
+        items={[
+          {
+            key: "basic",
+            label: "基本信息",
+            children: (
+              <div className="detail">
+                <Load query={data}>
+                  <h3>{data.data?.filename}</h3>
+                  <dl className="kv">
+                    <dt>URI</dt>
+                    <dd>
+                      <code>
+                        {data.data?.location}/{data.data?.filename}
+                      </code>
+                    </dd>
+                    <dt>狀態</dt>
+                    <dd>
+                      <Dot
+                        value={
+                          data.data?.deleted
+                            ? "deleted"
+                            : data.data?.state || ""
+                        }
+                      />
+                    </dd>
+                    <dt>保存目錄</dt>
+                    <dd>{data.data?.location}/</dd>
+                    <dt>大小</dt>
+                    <dd>
+                      {data.data ? Math.ceil(data.data.byte_size / 1024) : 0} KB
+                    </dd>
+                    <dt>索引片段</dt>
+                    <dd>{data.data?.chunk_count}</dd>
+                    <dt>匯入時間</dt>
+                    <dd>{data.data ? when(data.data.created_at) : ""}</dd>
+                    <dt>Checksum</dt>
+                    <dd>
+                      <Typography.Text
+                        className="id"
+                        copyable={{ text: data.data?.checksum }}
+                      >
+                        {(data.data?.checksum || "").slice(0, 12)}…
+                      </Typography.Text>
+                    </dd>
+                  </dl>
+                  <h4>可讀 Agent</h4>
+                  {data.data?.scope === "private" ? (
+                    <PrivateResourceAccess spaceId={spaceId} />
+                  ) : (
+                    context && <AgentReaders context={context} />
+                  )}
+                </Load>
+              </div>
+            ),
+          },
+          {
+            key: "overview",
+            label: "概覽信息",
+            children: (
+              <div className="detail document-summary">
+                <h3>文件概覽</h3>
+                <p className="muted">
+                  使用已配置的模型，依據整份文件生成內容摘要。長文件會分段整理後合併。
+                </p>
+                {error ? <Problem error={error} /> : null}
+                {summary && <div className="document-fulltext">{summary}</div>}
+                <Button
+                  type="primary"
+                  loading={busy}
+                  onClick={generate}
+                  disabled={data.data?.deleted}
+                >
+                  {busy
+                    ? "正在生成摘要"
+                    : summary
+                      ? "重新生成摘要"
+                      : "生成內容摘要"}
+                </Button>
+                {summary && (
+                  <p className="muted">
+                    模型生成，請以完整信息中的原文為準。摘要保留至離開此文件。
+                  </p>
+                )}
+              </div>
+            ),
+          },
+          {
+            key: "full",
+            label: "完整信息",
+            children: (
+              <div className="detail">
+                <Load query={content}>
+                  <h3>{data.data?.filename}</h3>
+                  <p className="muted">
+                    顯示整份文件的文字內容；PDF
+                    按原頁碼排列，不包含圖片與原始版面。
+                  </p>
+                  {content.data?.pages.map((p, i) => (
+                    <section key={i} className="document-text-page">
+                      {p.page !== null && <h4>第 {p.page} 頁</h4>}
+                      <div className="document-fulltext">{p.content}</div>
+                    </section>
+                  ))}
+                </Load>
+              </div>
+            ),
+          },
+        ]}
+      />
     </div>
   );
 }

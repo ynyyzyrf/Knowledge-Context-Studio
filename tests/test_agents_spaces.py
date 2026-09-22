@@ -46,7 +46,11 @@ def test_credential_rotation_disable_and_no_secret_listing(app):
         listed = admin.get(base + "/credentials")
         assert listed.status_code == 200
         assert credential["token"] not in listed.text and "token_hash" not in listed.text
+        assert credential["mcp"]["mcpServer"]["mag-kb"]["env"]["MAG_KB_TOKEN"] == credential["token"]
+        assert credential["mcp"]["mcpServer"]["mag-kb"]["env"]["MAG_KB_BASE_URL"] == "http://localhost:8088"
         rotated = create(admin, base + f"/credentials/{credential['id']}/rotate", {})
+        assert rotated["mcp"]["credentialId"] == rotated["id"]
+        assert rotated["mcp"]["token"] == rotated["token"]
         assert machine.get("/v1/agent/me").status_code == 401
         machine.headers["Authorization"] = "Bearer " + rotated["token"]
         assert machine.get("/v1/agent/me").status_code == 200
@@ -134,7 +138,7 @@ def test_space_grants_and_foreign_tenant_objects_are_hidden(app):
 
     with TestClient(app) as admin, TestClient(app) as machine:
         tenant = admin_login(admin)
-        agent, _, credential = setup_agent(admin, tenant)
+        agent, subject, credential = setup_agent(admin, tenant)
         base = f"/v1/tenants/{tenant}"
         first = create(admin, base + "/spaces", {"name": "Allowed"})
         second = create(admin, base + "/spaces", {"name": "Hidden"})
@@ -144,6 +148,10 @@ def test_space_grants_and_foreign_tenant_objects_are_hidden(app):
         grant_url = base + f"/spaces/{first['id']}/agents/{agent['id']}"
         assert admin.put(grant_url, json={"active": True}).status_code == 200
         assert machine.get("/v1/agent/me").json()["space_ids"] == [first["id"]]
+        assert machine.get("/v1/agent/subjects").json()["items"][0]["id"] == subject["id"]
+        spaces = machine.get("/v1/agent/spaces").json()["items"]
+        assert [space["id"] for space in spaces] == [first["id"]]
+        assert spaces[0]["name"] == "Allowed"
         assert second["id"] not in machine.get("/v1/agent/me").text
         assert admin.put(grant_url, json={"active": False}).status_code == 200
         assert machine.get("/v1/agent/me").json()["space_ids"] == []
@@ -212,19 +220,17 @@ def test_space_description_update_and_stats(app):
         assert "last_activity_at" in detail
 
 
-def test_space_context_tree_lists_resources_and_subjects(app):
+def test_space_context_tree_does_not_alias_subjects_as_current_user(app):
     with TestClient(app) as admin:
         tenant = admin_login(admin)
-        agent, subject, _ = setup_agent(admin, tenant)
+        agent, _subject, _ = setup_agent(admin, tenant)
         base = f"/v1/tenants/{tenant}"
         space = create(admin, base + "/spaces", {"name": "K"})
         assert admin.put(base + f"/spaces/{space['id']}/agents/{agent['id']}", json={"active": True}).status_code == 200
         context = admin.get(base + f"/spaces/{space['id']}/context").json()
         assert [a["agent_id"] for a in context["agents"]] == [agent["id"]]
-        assert [s["id"] for s in context["subjects"]] == [subject["id"]]
-        assert context["subjects"][0]["agent_name"] == "Support"
-        assert context["subjects"][0]["memory_count"] == 0
-        assert context["subjects"][0]["session_count"] == 0
+        assert context["subjects"] == []
+        assert context["namespace"]["identity"] == "authenticated_user"
         assert context["categories"] == []
 
 
