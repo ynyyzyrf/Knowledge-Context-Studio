@@ -95,6 +95,13 @@ Objective: complete the internal-team V1.0 and start the project. Scope remains 
 - Full PG suite 59 passed/3 opt-in skips before final three added boundary tests; final document PG suite 10 passed; real three-format native-engine roundtrip 1 passed; frontend 6 passed/build passed. Browser verified Chinese file upload, completed index, preview and paraphrased reference retrieval. API verified deletion and engine cleanup; isolated acceptance identities were disabled/revoked.
 - Evidence: `docs/evidence/document-import-acceptance.md`; usage/API: `docs/document-import.md`. File ingestion portion of P3/P4 advances; third-party autonomous Agent use, production deployment/recovery/load/quality acceptance remain outstanding. DOCX/OCR/batch imports are not included.
 
+### Unified Docker deployment (2026-09-22)
+
+- Added pinned multi-stage platform image, separate API/worker services, private PostgreSQL/native engine, isolated runtime configuration, migration/start sequence and offline image export. Existing development services remain separate.
+- Explicit exact-origin HTTP allowance supports the private Docker engine without accepting arbitrary HTTP endpoints. Publisher setup resolves the environment-file symlink before atomic updates, so non-root tools can update the mounted configuration directory.
+- Local Linux containers passed real upload/index/context/deletion and external message write/read/idempotency smoke checks. Exported all three images; no runtime configuration or data volumes included. Bash script syntax checked, equivalent Compose steps executed from Windows.
+- Evidence: `docs/evidence/docker-deployment-acceptance.md`; instructions: `docs/docker-deployment.md`. Tencent Cloud machine, HTTPS, Hermes and production restore/load remain unverified.
+
 ### Two-layer information architecture refactor (2026-09-22)
 
 - Restructured the frontend into two product layers. Organization level: Knowledge Space list (dense stat cards: files/memory/agents/last activity, no UUID exposure), external Agent access, members, audit and a Settings page that now hosts jobs, memory governance and API testing. Space level: full-screen per-space Context Studio with left space nav (files/search/upload/agent access), middle context tree (context:// resources by filename-derived category plus subjects with memories/peers/sessions counts) and a right detail panel with URI, metadata, agent readability and per-subject read/write scopes.

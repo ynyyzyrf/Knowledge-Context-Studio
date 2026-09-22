@@ -1,0 +1,17 @@
+**/.git
+**/.env
+**/.env.*
+**/runtime
+**/node_modules
+**/dist
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+**/*.pyc
+**/*.tsbuildinfo
+**/*.tar
+**/*.tar.gz
+docs
+tests
+integration

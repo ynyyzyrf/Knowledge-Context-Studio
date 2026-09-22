@@ -1,10 +1,10 @@
 # 雲端試運行與外部 Agent 冒煙驗收
 
-狀態：2026-09-22 已核對本機實作；尚未取得目標雲端環境，未部署、未執行雲端測試。
+狀態：2026-09-22 已核對本機實作；尚未取得目標雲端環境，未部署、未執行雲端測試。Docker 配置與操作步驟已另見 [Docker 統一部署指南](docker-deployment.md)。
 
 ## 部署前需完成
 
-目前 `scripts/start.ps1` 啟動本機 Windows API／worker；`compose.yaml` 只提供資料庫，`compose.engine.yaml` 引用只存在本機的 native 映像 ID。這不是可直接拉取的完整雲端部署包。
+原本 `scripts/start.ps1`、`compose.yaml` 與 `compose.engine.yaml` 是本機開發配置。新增的 `compose.deploy.yaml`、Dockerfile 與 `deploy/start.sh` 提供容器統一部署；固定 native 引擎仍須先匯出／匯入，尚未發布 registry。
 
 取得伺服器作業系統／CPU 架構、Docker 狀態、網域和部署通道後，需依目標環境補齊：
 

@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     embedding_api_key: SecretStr = SecretStr("")
     embedding_model: str = ""
     engine_url: str = ""
+    engine_http_allowed_origin: str = ""
     engine_api_key: SecretStr = SecretStr("")
     engine_timeout_seconds: float = Field(default=60, gt=1, le=300)
     model_timeout_seconds: float = Field(default=60, gt=0, le=300)
@@ -81,7 +82,11 @@ class Settings(BaseSettings):
                 or endpoint.path not in ("", "/")
             ):
                 raise ValueError("Engine URL must be an origin without credentials or paths")
-            if endpoint.scheme == "http" and endpoint.hostname not in ("localhost", "127.0.0.1", "::1"):
+            if (
+                endpoint.scheme == "http"
+                and endpoint.hostname not in ("localhost", "127.0.0.1", "::1")
+                and f"{endpoint.scheme}://{endpoint.netloc}" != self.engine_http_allowed_origin
+            ):
                 raise ValueError("Remote engine requires HTTPS")
         if self.model_base_url:
             validate_http_base_url("model", self.model_base_url, self.model_http_allowed_origin)

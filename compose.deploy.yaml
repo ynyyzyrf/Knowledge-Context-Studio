@@ -1,0 +1,93 @@
+name: kcs-cloud
+
+x-platform: &platform
+  image: ${KCS_PLATFORM_IMAGE:-kcs-platform:local}
+  init: true
+  restart: unless-stopped
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+  read_only: true
+  tmpfs: ["/tmp:size=128m,mode=1777"]
+  volumes:
+    - type: bind
+      source: ./deploy/runtime/.env
+      target: /app/runtime/.env
+      read_only: true
+      bind:
+        create_host_path: false
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+  postgres:
+    image: ${KCS_POSTGRES_IMAGE:-postgres@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685}
+    env_file: ./deploy/runtime/postgres.env
+    volumes: ["postgres_data:/var/lib/postgresql/data"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kcs -d kcs"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+
+  engine:
+    # Import the already validated linux/amd64 native image before startup.
+    image: ${KCS_ENGINE_IMAGE:-kcs-openviking:20ec78a1}
+    platform: linux/amd64
+    entrypoint: /app/.venv/bin/python
+    working_dir: /data
+    command: ["-I", "-m", "openviking_cli.server_bootstrap", "--config", "/config/ov.conf"]
+    environment:
+      OPENVIKING_CONFIG_FILE: /config/ov.conf
+    volumes:
+      - type: bind
+        source: ./deploy/runtime/engine.json
+        target: /config/ov.conf
+        read_only: true
+        bind:
+          create_host_path: false
+      - engine_data:/data
+    restart: unless-stopped
+    cpus: 2
+    mem_limit: 4g
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+
+  api:
+    <<: *platform
+    ports: ["${KCS_BIND_ADDRESS:-127.0.0.1}:${KCS_HTTP_PORT:-18088}:8088"]
+    depends_on:
+      postgres: {condition: service_healthy}
+      engine: {condition: service_started}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8088/health/ready', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  worker:
+    <<: *platform
+    command: ["python", "-m", "kcs.worker"]
+    stop_grace_period: 90s
+    depends_on:
+      api: {condition: service_healthy}
+
+  tools:
+    image: ${KCS_PLATFORM_IMAGE:-kcs-platform:local}
+    profiles: [tools]
+    init: true
+    volumes:
+      - ./deploy/runtime:/app/runtime
+    command: ["python", "scripts/check-engine.py"]
+
+volumes:
+  postgres_data:
+  engine_data:
