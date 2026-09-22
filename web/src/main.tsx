@@ -218,22 +218,26 @@ function OrgShell({
         </Layout.Sider>
         <Layout>
           <header className="topbar">
-            <Select
-              aria-label="選擇團隊"
-              value={tenant.tenant_id}
-              options={profile.memberships.map((m) => ({
-                value: m.tenant_id,
-                label: m.name,
-              }))}
-              onChange={async (value) => {
-                setToken("");
-                await qc.cancelQueries();
-                qc.removeQueries({ queryKey: ["tenant"] });
-                qc.removeQueries({ queryKey: ["machine"] });
-                onTenant(value);
-                navigate("/spaces");
-              }}
-            />
+            <div>
+              {profile.memberships.length > 1 && (
+                <Select
+                  aria-label="選擇團隊"
+                  value={tenant.tenant_id}
+                  options={profile.memberships.map((m) => ({
+                    value: m.tenant_id,
+                    label: m.name,
+                  }))}
+                  onChange={async (value) => {
+                    setToken("");
+                    await qc.cancelQueries();
+                    qc.removeQueries({ queryKey: ["tenant"] });
+                    qc.removeQueries({ queryKey: ["machine"] });
+                    onTenant(value);
+                    navigate("/spaces");
+                  }}
+                />
+              )}
+            </div>
             <Space>
               <span className="account-email">{profile.person.email}</span>
               <Button
