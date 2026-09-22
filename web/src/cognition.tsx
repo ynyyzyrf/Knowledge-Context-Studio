@@ -155,7 +155,7 @@ export function Cognition() {
                       total: cognition.data?.candidates_total ?? 0,
                       showSizeChanger: false,
                       hideOnSinglePage: false,
-                      position: ["topRight", "bottomRight"],
+                      position: ["bottomRight"],
                       showTotal: (total) => `共 ${total} 筆`,
                       onChange: setCandidatePage,
                     }}
@@ -255,7 +255,7 @@ export function Cognition() {
                         total: cognition.data?.memories_total ?? 0,
                         showSizeChanger: false,
                         hideOnSinglePage: false,
-                        position: ["topRight", "bottomRight"],
+                        position: ["bottomRight"],
                         showTotal: (total) => `共 ${total} 筆`,
                         onChange: setMemoryPage,
                       }}
