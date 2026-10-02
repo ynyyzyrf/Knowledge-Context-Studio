@@ -486,3 +486,84 @@ class MemoryProjection(Base):
     error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     request_id: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[float] = mapped_column(Float, default=time.time)
+
+
+class NamespaceEntry(Base):
+    __tablename__ = "namespace_entries"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "space_id"], ["knowledge_spaces.tenant_id", "knowledge_spaces.id"]
+        ),
+        ForeignKeyConstraint(["tenant_id", "person_id"], ["memberships.tenant_id", "memberships.person_id"]),
+        CheckConstraint("kind in ('memories','sessions','skills','peers')", name="namespace_entry_kind"),
+        CheckConstraint("status in ('pending','active','disabled','deleted')", name="namespace_entry_status"),
+        UniqueConstraint("tenant_id", "space_id", "person_id", "kind", "created_by", "external_id"),
+    )
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=identifier)
+    tenant_id: Mapped[str] = mapped_column(String(32), index=True)
+    space_id: Mapped[str] = mapped_column(String(32), index=True)
+    person_id: Mapped[str] = mapped_column(String(32), index=True)
+    kind: Mapped[str] = mapped_column(String(16))
+    title: Mapped[str] = mapped_column(String(200))
+    content: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(16), default="pending")
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    created_by: Mapped[str] = mapped_column(String(64))
+    external_id: Mapped[str] = mapped_column(String(128))
+    input_hash: Mapped[str] = mapped_column(String(64))
+    source_message_ids: Mapped[list] = mapped_column(JSON, default=list)
+    created_at: Mapped[float] = mapped_column(Float, default=time.time)
+    updated_at: Mapped[float] = mapped_column(Float, default=time.time)
+    embedding_vectors: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    embedding_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    embedding_model_key: Mapped[str] = mapped_column(String(64), default="", server_default="")
+    embedding_attempt: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    embedding_available_at: Mapped[float] = mapped_column(Float, default=0, server_default="0")
+    embedding_lease_token: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    embedding_lease_until: Mapped[float] = mapped_column(Float, default=0, server_default="0")
+    embedding_error: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+
+class NamespaceRevision(Base):
+    __tablename__ = "namespace_revisions"
+    entry_id: Mapped[str] = mapped_column(ForeignKey("namespace_entries.id"), primary_key=True)
+    version: Mapped[int] = mapped_column(Integer, primary_key=True)
+    title: Mapped[str] = mapped_column(String(200))
+    content: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(16))
+    actor_id: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[float] = mapped_column(Float, default=time.time)
+
+
+class NamespaceMessage(Base):
+    __tablename__ = "namespace_messages"
+    __table_args__ = (
+        UniqueConstraint("session_id", "external_id"),
+        UniqueConstraint("session_id", "sequence"),
+    )
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=identifier)
+    session_id: Mapped[str] = mapped_column(ForeignKey("namespace_entries.id"), index=True)
+    external_id: Mapped[str] = mapped_column(String(128))
+    sequence: Mapped[int] = mapped_column(Integer)
+    role: Mapped[str] = mapped_column(String(16))
+    content: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[float] = mapped_column(Float, default=time.time)
+
+
+class NamespaceScopeGrant(Base):
+    __tablename__ = "namespace_scope_grants"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "space_id"], ["knowledge_spaces.tenant_id", "knowledge_spaces.id"]
+        ),
+        ForeignKeyConstraint(["tenant_id", "person_id"], ["memberships.tenant_id", "memberships.person_id"]),
+        ForeignKeyConstraint(["tenant_id", "agent_id"], ["agents.tenant_id", "agents.id"]),
+        CheckConstraint("kind in ('memories','sessions','skills','peers')", name="namespace_scope_kind"),
+    )
+    tenant_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    space_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    person_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    agent_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    kind: Mapped[str] = mapped_column(String(16), primary_key=True)
+    can_read: Mapped[bool] = mapped_column(Boolean, default=False)
+    can_write: Mapped[bool] = mapped_column(Boolean, default=False)

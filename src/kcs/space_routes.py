@@ -18,6 +18,7 @@ from .models import (
     DocumentChunk,
     KnowledgeSpace,
     Membership,
+    NamespaceEntry,
     PersonSpaceGrant,
     ResourceFolder,
 )
@@ -83,6 +84,19 @@ def space_stats(db: Session, tenant_id: str, space_ids: list[str], person_id: st
             AgentSpaceGrant.active.is_(True),
         )
     ).all()
+    personal_memories = dict(
+        db.execute(
+            select(NamespaceEntry.space_id, func.count())
+            .where(
+                NamespaceEntry.tenant_id == tenant_id,
+                NamespaceEntry.space_id.in_(space_ids),
+                NamespaceEntry.person_id == person_id,
+                NamespaceEntry.kind == "memories",
+                NamespaceEntry.status == "active",
+            )
+            .group_by(NamespaceEntry.space_id)
+        ).all()
+    )
     agent_counts = Counter(space for space, _ in grants)
     stats = {}
     for space in space_ids:
@@ -90,7 +104,7 @@ def space_stats(db: Session, tenant_id: str, space_ids: list[str], person_id: st
         stats[space] = {
             "document_count": count,
             "agent_count": agent_counts.get(space, 0),
-            "memory_count": 0,
+            "memory_count": personal_memories.get(space, 0),
             "last_activity_at": latest,
         }
     return stats
@@ -221,6 +235,18 @@ def space_context(
             AgentSpaceGrant.active.is_(True),
         )
     ).all()
+    namespace_counts = dict(
+        db.execute(
+            select(NamespaceEntry.kind, func.count())
+            .where(
+                NamespaceEntry.tenant_id == tenant_id,
+                NamespaceEntry.space_id == space_id,
+                NamespaceEntry.person_id == auth.person.id,
+                NamespaceEntry.status != "deleted",
+            )
+            .group_by(NamespaceEntry.kind)
+        ).all()
+    )
     return {
         "space": public_space(space),
         "categories": list(groups.values()),
@@ -231,8 +257,9 @@ def space_context(
             "directories": [
                 {
                     "name": name,
-                    "state": "available" if name == "resources" else "not_connected",
-                    "searchable": name == "resources",
+                    "count": namespace_counts.get(name, 0),
+                    "state": "not_connected" if name == "privacy" else "available",
+                    "searchable": name != "privacy",
                 }
                 for name in ["memories", "peers", "privacy", "resources", "sessions", "skills"]
             ],

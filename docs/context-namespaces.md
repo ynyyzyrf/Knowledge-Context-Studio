@@ -54,10 +54,10 @@ Content-Type: application/json
 
 遷移 `da912601af82` 保留現有文件為共享文件，不自動移動、變更既有索引或認領他人資料。既有 Token 的使用者綁定為空，不能讀取私人文件；輪替也不會自動綁定，需登入後重新簽發。綁定了使用者的 Token 只有該使用者能輪替，避免其他管理員取得另一人的私人身份；管理員仍可撤銷。
 
-`memories`、`peers`、`privacy`、`sessions`、`skills` 目前只建立固定目錄與語義，尚未接入個人資料寫入／讀回，界面明確標示未接入。privacy 不接受文件上傳、不參與普通知識檢索，也尚未提供秘密保存功能。
+2026-09-27：`memories`、`sessions`、`skills`、`peers` 已接通個人資料建立、治理、讀回及獨立 Agent 讀寫 grant，詳見 [個人 Context 契約](personal-context.md)。privacy 繼續關閉，不接受文件上傳、不參與普通知識檢索，也尚未提供秘密保存功能。
 
-現有記憶／會話是 Agent＋Subject 模型，保留於既有記憶治理／會話 API，不會假裝成登入使用者的私人記憶，也不會按 Agent 的 Space 授權複製到每個 Space。後續接入個人 memories／sessions 必須新增 Person＋Space 歸屬與完整生命周期驗證。
+現有記憶／會話是 Agent＋Subject 模型，保留於既有記憶治理／會話 API，不會假裝成登入使用者的私人記憶，也不會按 Agent 的 Space 授權複製到每個 Space。新個人資料使用獨立的 Person＋Space 資料表和授權；舊資料不自動認領。
 
-`POST /v1/context` 明確傳 `space_ids` 時只查指定 Space 的文件，不混入沒有 Space 歸屬的舊 Subject 記憶；空陣列返回空結果。省略 `space_ids` 才保留舊 Subject 記憶檢索及所有已授權 Space 文件（仍有最多 10 個 Space 上限）。
+`POST /v1/context` 明確傳 `space_ids` 時查指定 Space 的文件及有獨立授權的個人 Context，不混入沒有 Space 歸屬的舊 Subject 記憶；空陣列返回空結果。省略 `space_ids` 才保留舊 Subject 記憶檢索及所有已授權 Space 文件（仍有最多 10 個 Space 上限）。
 
 本輪僅本機修改；不代表雲端已發布或整個個人 Context 系統完成。

@@ -13,8 +13,22 @@ from .engine import (
     space_uri,
     subject_uri,
 )
-from .models import AuditEvent, Document, DocumentChunk, MemoryProjection, MemoryRecord, MemoryRevision
+from .model_service import ModelService, ModelServiceError
+from .models import (
+    AuditEvent,
+    Document,
+    DocumentChunk,
+    MemoryProjection,
+    MemoryRecord,
+    MemoryRevision,
+    NamespaceEntry,
+)
 from .namespace_routes import private_owner
+from .personal_context_routes import agent_namespace
+from .personal_context_routes import conditions as namespace_conditions
+from .personal_context_routes import payload as namespace_payload
+from .personal_index import configured, model_key
+from .personal_retrieval import allocate, rank
 from .policy import AgentAuth, agent_auth, allowed_space_ids, allowed_subject_ids, locked_agent_auth
 from .security import get_db
 
@@ -38,6 +52,20 @@ def private_scopes(db, auth, spaces):
             if error.status_code != 404:
                 raise
     return result
+
+
+def personal_filters(db, auth, spaces):
+    filters = []
+    for space_id in spaces:
+        for kind in ("memories", "skills", "peers"):
+            try:
+                who = agent_namespace(db, auth, space_id, kind)
+            except HTTPException as error:
+                if error.status_code != 404:
+                    raise
+                continue
+            filters.append(and_(*namespace_conditions(who, space_id, kind)))
+    return filters
 
 
 def check_subject(db, auth, subject_id):
@@ -114,6 +142,8 @@ def list_memories(
 @router.post("/context")
 def context(body: ContextInput, request: Request):
     database = request.app.state.database
+    settings = request.app.state.settings
+    key = model_key(settings)
     # Never hold a policy lock or transaction during network I/O.
     with database.sessions.begin() as db:
         auth = agent_auth(request, db)
@@ -129,12 +159,39 @@ def context(body: ContextInput, request: Request):
         owners = private_scopes(db, auth, spaces)
         roots = ([root] if include_legacy_memory else []) + [space_uri(auth.tenant_id, s) for s in spaces]
         roots += [private_space_uri(auth.tenant_id, s, owner) for s, owner in owners.items()]
+        filters = personal_filters(db, auth, spaces)
+        has_vectors = (
+            bool(filters)
+            and db.scalar(
+                select(NamespaceEntry.id)
+                .where(
+                    or_(*filters),
+                    NamespaceEntry.status == "active",
+                    NamespaceEntry.embedding_version == NamespaceEntry.version,
+                    NamespaceEntry.embedding_model_key == key,
+                )
+                .limit(1)
+            )
+            is not None
+        )
     factory = getattr(request.app.state, "context_engine_factory", None)
     try:
         with factory() if factory else OpenViking(request.app.state.settings) as engine:
             hits = engine.find(roots, body.query, min(100, body.limit * 5)) if roots else []
     except EngineError as error:
         raise HTTPException(503, str(error)) from None
+    query_vector, degraded_reason = None, None
+    model_factory = getattr(request.app.state, "personal_model_factory", None)
+    if has_vectors and (model_factory or configured(settings)):
+        try:
+            with model_factory() if model_factory else ModelService(settings) as model:
+                query_vector = model.embed([body.query]).vectors[0]
+        except ModelServiceError as error:
+            degraded_reason = error.code
+    elif not (model_factory or configured(settings)):
+        degraded_reason = "embedding_not_configured"
+    else:
+        degraded_reason = "index_pending"
     with database.sessions.begin() as db:
         auth = locked_agent_auth(request, auth, db)
         check_subject(db, auth, body.subject_id)
@@ -179,7 +236,8 @@ def context(body: ContextInput, request: Request):
             )
         ).all()
         verified_documents = {document_uri(d, c.number): (d, c) for d, c in chunks}
-        items, documents, sections, used, seen = [], [], [], 0, set()
+        items, documents, sections, seen = [], [], [], set()
+        document_pool, personal_pool, results = [], [], {}
         for uri, _ in hits:
             if uri in seen:
                 continue
@@ -207,19 +265,49 @@ def context(body: ContextInput, request: Request):
                 destination = documents
             else:
                 continue
-            cost = len(section) + (2 if sections else 0)
-            if used + cost > body.max_chars:
-                continue
+            results[uri] = (destination, result)
+            document_pool.append((uri, section))
+        personal = []
+        filters = personal_filters(db, auth, spaces)
+        personal_rows = (
+            db.scalars(
+                select(NamespaceEntry).where(
+                    or_(*filters),
+                    NamespaceEntry.status == "active",
+                )
+            ).yield_per(50)
+            if filters
+            else []
+        )
+        # Rows, versions and grants are loaded again after ALL network I/O, under the policy lock.
+        ranked, stats = rank(personal_rows, body.query, query_vector, key, max_chars=body.max_chars)
+        for row in ranked:
+            identity = "personal:" + row.id
+            section = f"[personal:{row.kind}:{row.id}@v{row.version}]\n{row.content}"
+            results[identity] = (
+                personal,
+                {**namespace_payload(row, settings=settings), "space_id": row.space_id},
+            )
+            personal_pool.append((identity, section))
+        for identity, section in allocate(
+            document_pool, personal_pool, limit=body.limit, max_chars=body.max_chars
+        ):
+            destination, result = results[identity]
             destination.append(result)
             sections.append(section)
-            used += cost
-            if len(items) + len(documents) >= body.limit:
-                break
-        audit(db, request, auth, body.subject_id, "context.read", len(items) + len(documents))
+        mode = "hybrid" if query_vector is not None and stats["indexed_count"] else "keyword"
+        audit(db, request, auth, body.subject_id, "context.read", len(items) + len(documents) + len(personal))
         return {
             "subject_id": body.subject_id,
             "memories": items,
             "documents": documents,
+            "personal_context": personal,
+            "personal_context_retrieval": mode,
+            "personal_retrieval": {
+                "mode": mode,
+                "degraded_reason": degraded_reason,
+                **stats,
+            },
             "request_id": request.state.request_id,
             "context": "\n\n".join(sections),
             "content_role": "untrusted_reference_data",

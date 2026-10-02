@@ -1004,4 +1004,33 @@ button:active:not(:disabled):not(.ant-switch) {
   }
 }
 
-.reader-tabs[hidden] { display: none; }
+.reader-tabs[hidden] {
+  display: none;
+}
+.personal-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0 0 20px;
+}
+.personal-toolbar .ant-input-search {
+  flex: 1 1 220px;
+}
+.personal-title {
+  white-space: normal;
+  height: auto;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.personal-editor {
+  display: grid;
+  gap: 18px;
+  padding-top: 20px;
+}
+.personal-editor label {
+  display: grid;
+  gap: 8px;
+}
+.personal-editor .ant-select {
+  min-width: 140px;
+}

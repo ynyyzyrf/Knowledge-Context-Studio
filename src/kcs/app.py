@@ -16,6 +16,7 @@ from .folder_routes import router as folder_router
 from .job_routes import router as job_router
 from .memory_routes import router as memory_router
 from .namespace_routes import router as namespace_router
+from .personal_context_routes import router as personal_context_router
 from .session_routes import router as session_router
 from .space_routes import router as space_router
 
@@ -65,6 +66,7 @@ def create_app(settings: Settings | None = None):
     app.include_router(document_router)
     app.include_router(folder_router)
     app.include_router(namespace_router)
+    app.include_router(personal_context_router)
     if (settings.frontend_dist / "assets").is_dir():
         app.mount("/assets", StaticFiles(directory=settings.frontend_dist / "assets"), name="assets")
 

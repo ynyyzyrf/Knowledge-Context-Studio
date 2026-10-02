@@ -1,0 +1,17 @@
+{
+  "name": "@mag/knowledge-context-mcp",
+  "version": "0.2.0",
+  "description": "MCP bridge for Hermes to access MAG Knowledge Context Studio through product-scoped credentials.",
+  "type": "module",
+  "bin": {
+    "mag-kb-mcp": "./server.mjs"
+  },
+  "scripts": {
+    "check": "node --check server.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "UNLICENSED",
+  "private": true
+}

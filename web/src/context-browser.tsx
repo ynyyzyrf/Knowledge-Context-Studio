@@ -1,3 +1,4 @@
+import { PersonalContext } from "./personal-context";
 import { PrivateResourceAccess } from "./private-resource-access";
 import { useRef, useState, type ReactNode, type Key } from "react";
 import { Button, Input, Tree, Typography, type InputRef } from "antd";
@@ -136,9 +137,20 @@ export function ContextTree({
       .filter((c) => c.scope === scope)
       .reduce((n, c) => n + c.document_count, 0) || 0;
   const personal = (folder: string, description: string) =>
-    node({ type: "namespace-folder", folder }, folder, description, undefined, [
-      empty(`namespace-empty:${folder}`, "尚未接入此個人目錄"),
-    ]);
+    node(
+      { type: "namespace-folder", folder },
+      folder,
+      description,
+      folder === "privacy"
+        ? undefined
+        : context?.namespace?.directories.find((d) => d.name === folder)?.count,
+      [
+        empty(
+          `namespace-empty:${folder}`,
+          folder === "privacy" ? "私密配置尚未開放" : "點選目錄查看與管理資料",
+        ),
+      ],
+    );
   const nodes: Node[] = [
     node({ type: "user" }, "user", "", undefined, [
       node(
@@ -348,103 +360,116 @@ export function ContextReader({
           </span>
         </p>
       </header>
-      <section className="reader-card" aria-label={`${name} 閱讀區`}>
-        <div className="reader-tabs" hidden={file}>
-          {!file && (
-            <>
-              <button
-                className={`reader-tab ${view === "overview" ? "active" : ""}`}
-                onClick={() => setView("overview")}
-              >
-                概覽
-              </button>
-              <button
-                className={`reader-tab ${view === "details" ? "active" : ""}`}
-                onClick={() => setView("details")}
-              >
-                詳細資料
-              </button>
-            </>
-          )}
-          {!file && (
-            <Typography.Text
-              className="reader-copy"
-              copyable={{ text: summary }}
-              aria-label="複製目錄說明"
-            />
-          )}
-        </div>
-        <div className={file ? "document-reader-body" : "reader-body"}>
-          {(file || view === "details") &&
-          !["user", "default", "namespace-folder"].includes(selection.type) ? (
-            children
-          ) : (
-            <>
-              <h2>{name}</h2>
-              <p className="reader-summary">{summary}</p>
-              {selection.type === "overview" && (
-                <div className="space-overview-body">
-                  <div className="overview-metrics">
-                    <div>
-                      <strong>
-                        {context?.categories.reduce(
-                          (n, c) => n + c.document_count,
-                          0,
-                        ) ?? 0}
-                      </strong>
-                      <span>可讀文件</span>
+      {selection.type === "namespace-folder" &&
+      selection.folder !== "privacy" ? (
+        <section className="reader-card reader-body">
+          <PersonalContext
+            key={`${spaceId}:${selection.folder}`}
+            spaceId={spaceId}
+            folder={selection.folder}
+          />
+        </section>
+      ) : (
+        <section className="reader-card" aria-label={`${name} 閱讀區`}>
+          <div className="reader-tabs" hidden={file}>
+            {!file && (
+              <>
+                <button
+                  className={`reader-tab ${view === "overview" ? "active" : ""}`}
+                  onClick={() => setView("overview")}
+                >
+                  概覽
+                </button>
+                <button
+                  className={`reader-tab ${view === "details" ? "active" : ""}`}
+                  onClick={() => setView("details")}
+                >
+                  詳細資料
+                </button>
+              </>
+            )}
+            {!file && (
+              <Typography.Text
+                className="reader-copy"
+                copyable={{ text: summary }}
+                aria-label="複製目錄說明"
+              />
+            )}
+          </div>
+          <div className={file ? "document-reader-body" : "reader-body"}>
+            {(file || view === "details") &&
+            !["user", "default", "namespace-folder"].includes(
+              selection.type,
+            ) ? (
+              children
+            ) : (
+              <>
+                <h2>{name}</h2>
+                <p className="reader-summary">{summary}</p>
+                {selection.type === "overview" && (
+                  <div className="space-overview-body">
+                    <div className="overview-metrics">
+                      <div>
+                        <strong>
+                          {context?.categories.reduce(
+                            (n, c) => n + c.document_count,
+                            0,
+                          ) ?? 0}
+                        </strong>
+                        <span>可讀文件</span>
+                      </div>
+                      <div>
+                        <strong>
+                          {context?.agents.filter((a) => a.agent_active)
+                            .length ?? 0}
+                        </strong>
+                        <span>已接入 Agent</span>
+                      </div>
                     </div>
-                    <div>
-                      <strong>
-                        {context?.agents.filter((a) => a.agent_active).length ??
-                          0}
-                      </strong>
-                      <span>已接入 Agent</span>
-                    </div>
+                    <h3>從資料目錄開始</h3>
+                    <button
+                      className="namespace-shortcut"
+                      onClick={() =>
+                        onSelect({ type: "resources", scope: "private" })
+                      }
+                    >
+                      <span className="shortcut-icon">
+                        <LockOutlined />
+                      </span>
+                      <span>
+                        <strong>我的私人知識</strong>
+                        <small>user/default/resources</small>
+                        <p>一般上傳保存在這裡，由你決定 Agent 的讀取權。</p>
+                      </span>
+                      <ArrowRightOutlined />
+                    </button>
+                    <button
+                      className="namespace-shortcut"
+                      onClick={() =>
+                        onSelect({ type: "resources", scope: "shared" })
+                      }
+                    >
+                      <span className="shortcut-icon">
+                        <TeamOutlined />
+                      </span>
+                      <span>
+                        <strong>空間共享知識</strong>
+                        <small>resources</small>
+                        <p>集中管理此空間內可供已授權 Agent 讀取的資料。</p>
+                      </span>
+                      <ArrowRightOutlined />
+                    </button>
                   </div>
-                  <h3>從資料目錄開始</h3>
-                  <button
-                    className="namespace-shortcut"
-                    onClick={() =>
-                      onSelect({ type: "resources", scope: "private" })
-                    }
-                  >
-                    <span className="shortcut-icon">
-                      <LockOutlined />
-                    </span>
-                    <span>
-                      <strong>我的私人知識</strong>
-                      <small>user/default/resources</small>
-                      <p>一般上傳保存在這裡，由你決定 Agent 的讀取權。</p>
-                    </span>
-                    <ArrowRightOutlined />
-                  </button>
-                  <button
-                    className="namespace-shortcut"
-                    onClick={() =>
-                      onSelect({ type: "resources", scope: "shared" })
-                    }
-                  >
-                    <span className="shortcut-icon">
-                      <TeamOutlined />
-                    </span>
-                    <span>
-                      <strong>空間共享知識</strong>
-                      <small>resources</small>
-                      <p>集中管理此空間內可供已授權 Agent 讀取的資料。</p>
-                    </span>
-                    <ArrowRightOutlined />
-                  </button>
-                </div>
-              )}
-              {selection.type === "resources" &&
-                selection.scope === "private" && (
-                  <PrivateResourceAccess spaceId={spaceId} />
                 )}
-            </>
-          )}
-        </div>
-      </section>
+                {selection.type === "resources" &&
+                  selection.scope === "private" && (
+                    <PrivateResourceAccess spaceId={spaceId} />
+                  )}
+              </>
+            )}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

@@ -44,6 +44,7 @@ export interface SpaceSubject {
   session_count: number;
 }
 export interface SpaceContext {
+  namespace?: { directories: { name: string; state: string; count: number }[] };
   space: Space;
   agents: { agent_id: string; agent_name: string; agent_active: boolean }[];
   categories: SpaceCategory[];

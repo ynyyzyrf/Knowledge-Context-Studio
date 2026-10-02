@@ -1,10 +1,31 @@
 # Knowledge Context Studio 專案進度
 
-最後更新：2026-09-22（兩層信息架構重構後）。維護者：MAG／協作開發者。
+最後更新：2026-10-02（個人混合召回及上下文配額，本地未推送）。維護者：MAG／協作開發者。
 
 **目前階段：核心流程已在本機跑通，可進行內部試用與外部 Agent 接入驗收；尚未完成生產上線驗收。**
 
 目標是供內部團隊使用、可上生產的知識與記憶平台。Agent 在外部執行；平台負責身份、空間授權、知識匯入、記憶治理及上下文讀回。下列狀態來自已保存的驗收紀錄，不代表服務即時健康狀態。
+
+## 2026-10-02 個人 Context 品質第一階段
+
+- 先完成[需求／驗收標準](docs/requirements/2026-10-02-context-quality.md)及[實作計畫](docs/superpowers/plans/2026-10-02-context-quality.md)，再進行召回、索引及配額優化；保留現有未提交修改。
+- 個人 memories／skills／peers 支援中英文詞項＋真實 Embedding 語意排名融合。背景 worker 建立 PostgreSQL 版本化分段向量；租約／重試／模型變更補建；改版、停用及刪除清除過期向量，晚到結果不能復活。
+- Context 為個人資料保留名額和軟字數份額，不再只取文件用剩的空位；保留總 limit／max_chars，完整正文、版本及來源。查询後重驗授權；sessions、privacy 及既有 Subject／Space 語意不擴張。
+- API 回應召回模式、索引覆蓋及降級原因；資料詳情顯示語意索引狀態和失敗重試。後端新遷移 `4c2f8a10d301` 已套用本地，API／worker 已重啟；雲端未部署，Git 未提交／推送。
+- PostgreSQL 全套回歸 96 passed／4 skipped；其後同分排序修正以 PostgreSQL 針對組＋真實模型 8 passed 驗證（不與全套相加）。真實模型測試涵蓋三筆合成偏好的改寫 top-1；Node MCP stdio→HTTP 讀回及撤權契約通過。最終證據見 [品質驗收](docs/evidence/context-quality-acceptance.md)。
+- 前端 6 tests passed、build 通過，保留既有 bundle 體積警告；本次瀏覽器只確認登入頁載入，不宣稱登入後新介面瀏覽器驗收。
+- 最終本機 SQLite 全套 92 passed／9 skipped，包含排序同分修正；不得與 PostgreSQL 或真實模型案例加總為獨立測試數。
+- 後續：常駐偏好、事實衝突／到期治理、真實外部 Agent 自主驗收、業務 30 題品質集及跨文件候選 Wiki。
+
+## 2026-09-27 個人 Context 目錄（本地完成，未推送／部署）
+
+- memories、sessions、skills、peers 使用獨立 Person＋Space 資料表，接通建立、分頁、關鍵字查詢、內容、版本、來源、停用與刪除；目錄顯示本人的真實筆數。privacy 繼續關閉。
+- sessions 支援訊息追加／讀取／去重，訊息可提交候選記憶；其他資料先待審核，只有本人啟用後 Agent 才可讀取。Agent 無權審核或改刪內容，只能追加自己建立的會話。
+- 每目錄獨立讀取／提交 grant，仍要求 Token 使用者綁定＋有效人員／空間／Agent 權限。授權變更審計保存讀寫開關；來源引用驗證所有者與 Space；刪除清空正文與歷史正文。
+- 既有 `/v1/context` 新增有授權的 `personal_context`，僅取已啟用且關鍵字命中的 memories／skills／peers，共享結果／字數預算；原文件語義检索保持。新個人資料尚未進向量索引，sessions 尚無自動模型抽取。
+- 倉庫內新增 `integrations/mag-kb` 0.2.0，五個個人 Context 工具。實測 MCP stdio → 本地 HTTP 的 Skill 讀取與撤權拒絕；未替換工作區外旧 MCP 或更改 Hermes 設定。
+- 驗證：PostgreSQL 全量 82 passed／3 skipped；前端 6 passed，建置、Ruff、Alembic check 通過。瀏覽器完成會話→訊息→候選→来源→審核啟用及 Skill 新增／全文；1440／390px 版面與手機抽屜範圍檢查通過，修正詳情抽屜內編輯視窗被遮擋。合成資料已刪除，臨時 Agent 停用、Token 撤銷。
+- 遷移：`7f4198c4b3cb`，本地已套用。契約與限制見 [個人 Context](docs/personal-context.md)。既有 Subject 資料未搬移；普通成員自行簽發私人 Token、向量化／自動抽取、privacy 密鑰管理與生產驗收仍待後續處理。
 
 ## 2026-09-22 文件閱讀分頁（本地，未推送）
 

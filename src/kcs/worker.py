@@ -8,6 +8,7 @@ from .config import Settings
 from .database import Database
 from .document_worker import run_one as ingest_one
 from .jobs import run_one
+from .personal_index import run_one as index_personal_one
 from .publication import run_one as publish_one
 
 
@@ -25,9 +26,10 @@ def main():
             handled = run_one(database, settings)
             published = publish_one(database, settings)
             ingested = ingest_one(database, settings)
+            indexed = index_personal_one(database, settings)
             if args.once:
                 break
-            if not handled and not published and not ingested:
+            if not handled and not published and not ingested and not indexed:
                 stopping.wait(1)
     finally:
         database.engine.dispose()
