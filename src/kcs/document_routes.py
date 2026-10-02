@@ -147,7 +147,7 @@ def documents(
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
     auth: PersonAuth = Depends(person_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     person_space(db, tenant_id, space_id, auth)
     member = tenant_membership(db, tenant_id, auth)
@@ -183,7 +183,7 @@ def preview(
     document_id: str,
     offset: int = Query(0, ge=0),
     auth: PersonAuth = Depends(person_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     person_space(db, tenant_id, space_id, auth)
     doc = document(db, tenant_id, space_id, document_id, auth)
@@ -213,7 +213,7 @@ def full_content(
     space_id: str,
     document_id: str,
     auth: PersonAuth = Depends(person_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     person_space(db, tenant_id, space_id, auth)
     doc = document(db, tenant_id, space_id, document_id, auth)
@@ -245,7 +245,7 @@ def document_summary(tenant_id: str, space_id: str, document_id: str, request: R
 
 
 @router.post("/{document_id}/retry", status_code=202)
-def retry(tenant_id: str, space_id: str, document_id: str, request: Request, db: Session = Depends(get_db)):
+def retry(tenant_id: str, space_id: str, document_id: str, request: Request, db: Session = Depends(get_db, scope="function")):
     auth = lock_permission(db, request, tenant_id, space_id, write=False)
     doc = document(db, tenant_id, space_id, document_id, auth)
     if not doc.owner_person_id:
@@ -258,7 +258,7 @@ def retry(tenant_id: str, space_id: str, document_id: str, request: Request, db:
 
 
 @router.delete("/{document_id}", status_code=202)
-def remove(tenant_id: str, space_id: str, document_id: str, request: Request, db: Session = Depends(get_db)):
+def remove(tenant_id: str, space_id: str, document_id: str, request: Request, db: Session = Depends(get_db, scope="function")):
     auth = lock_permission(db, request, tenant_id, space_id, write=False)
     doc = document(db, tenant_id, space_id, document_id, auth)
     if not doc.owner_person_id:

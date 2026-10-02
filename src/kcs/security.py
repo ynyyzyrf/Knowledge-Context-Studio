@@ -37,7 +37,7 @@ class PersonAuth:
     session: LoginSession
 
 
-def person_auth(request: Request, db: Session = Depends(get_db)):
+def person_auth(request: Request, db: Session = Depends(get_db, scope="function")):
     token = request.cookies.get("kcs_session", "")
     session = db.get(LoginSession, digest(token)) if token else None
     person = db.get(Person, session.person_id) if session else None

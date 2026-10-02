@@ -104,7 +104,7 @@ def issue_credential(db, tenant_id, agent_id, subject_ids, expires_at, namespace
 
 
 @router.get("/agent/me")
-def machine_identity(auth: AgentAuth = Depends(agent_auth), db: Session = Depends(get_db)):
+def machine_identity(auth: AgentAuth = Depends(agent_auth), db: Session = Depends(get_db, scope="function")):
     return {
         "tenant_id": auth.tenant_id,
         "agent_id": auth.agent_id,
@@ -115,7 +115,7 @@ def machine_identity(auth: AgentAuth = Depends(agent_auth), db: Session = Depend
 
 
 @router.get("/agent/subjects")
-def machine_subjects(auth: AgentAuth = Depends(agent_auth), db: Session = Depends(get_db)):
+def machine_subjects(auth: AgentAuth = Depends(agent_auth), db: Session = Depends(get_db, scope="function")):
     ids = allowed_subject_ids(db, auth)
     rows = db.scalars(
         select(Subject)
@@ -130,7 +130,7 @@ def machine_subjects(auth: AgentAuth = Depends(agent_auth), db: Session = Depend
 
 
 @router.get("/agent/spaces")
-def machine_spaces(auth: AgentAuth = Depends(agent_auth), db: Session = Depends(get_db)):
+def machine_spaces(auth: AgentAuth = Depends(agent_auth), db: Session = Depends(get_db, scope="function")):
     ids = allowed_space_ids(db, auth)
     rows = db.scalars(
         select(KnowledgeSpace)
@@ -163,7 +163,7 @@ def machine_spaces(auth: AgentAuth = Depends(agent_auth), db: Session = Depends(
 
 
 @router.get("/tenants/{tenant_id}/agents")
-def agents(tenant_id: str, auth: PersonAuth = Depends(person_auth), db: Session = Depends(get_db)):
+def agents(tenant_id: str, auth: PersonAuth = Depends(person_auth), db: Session = Depends(get_db, scope="function")):
     tenant_membership(db, tenant_id, auth, admin=True)
     rows = db.scalars(select(Agent).where(Agent.tenant_id == tenant_id).order_by(Agent.id))
     return {"items": [public_entity(row) for row in rows]}
@@ -175,7 +175,7 @@ def create_agent(
     body: NamedInput,
     request: Request,
     auth: PersonAuth = Depends(person_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     tenant_membership(db, tenant_id, auth, admin=True)
     agent = Agent(tenant_id=tenant_id, name=body.name.strip())
@@ -192,7 +192,7 @@ def update_agent(
     body: ActiveInput,
     request: Request,
     auth: PersonAuth = Depends(person_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     tenant_membership(db, tenant_id, auth, admin=True)
     agent = scoped_object(db, Agent, tenant_id, agent_id)
@@ -203,7 +203,7 @@ def update_agent(
 
 @router.get("/tenants/{tenant_id}/agents/{agent_id}/subjects")
 def subjects(
-    tenant_id: str, agent_id: str, auth: PersonAuth = Depends(person_auth), db: Session = Depends(get_db)
+    tenant_id: str, agent_id: str, auth: PersonAuth = Depends(person_auth), db: Session = Depends(get_db, scope="function")
 ):
     tenant_membership(db, tenant_id, auth, admin=True)
     scoped_object(db, Agent, tenant_id, agent_id)
@@ -222,7 +222,7 @@ def create_subject(
     body: NamedInput,
     request: Request,
     auth: PersonAuth = Depends(person_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     tenant_membership(db, tenant_id, auth, admin=True)
     scoped_object(db, Agent, tenant_id, agent_id)
@@ -241,7 +241,7 @@ def update_subject(
     body: ActiveInput,
     request: Request,
     auth: PersonAuth = Depends(person_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     tenant_membership(db, tenant_id, auth, admin=True)
     subject = subject_for_agent(db, tenant_id, agent_id, subject_id)
@@ -252,7 +252,7 @@ def update_subject(
 
 @router.get("/tenants/{tenant_id}/agents/{agent_id}/credentials")
 def credentials(
-    tenant_id: str, agent_id: str, auth: PersonAuth = Depends(person_auth), db: Session = Depends(get_db)
+    tenant_id: str, agent_id: str, auth: PersonAuth = Depends(person_auth), db: Session = Depends(get_db, scope="function")
 ):
     tenant_membership(db, tenant_id, auth, admin=True)
     scoped_object(db, Agent, tenant_id, agent_id)
@@ -290,7 +290,7 @@ def create_credential(
     body: CredentialInput,
     request: Request,
     auth: PersonAuth = Depends(person_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     tenant_membership(db, tenant_id, auth, admin=True)
     agent = scoped_object(db, Agent, tenant_id, agent_id)
@@ -326,7 +326,7 @@ def rotate(
     body: StrictModel,
     request: Request,
     auth: PersonAuth = Depends(person_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     tenant_membership(db, tenant_id, auth, admin=True)
     agent = scoped_object(db, Agent, tenant_id, agent_id)
@@ -362,7 +362,7 @@ def revoke(
     credential_id: str,
     request: Request,
     auth: PersonAuth = Depends(person_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     tenant_membership(db, tenant_id, auth, admin=True)
     credential = owned_credential(db, tenant_id, agent_id, credential_id)

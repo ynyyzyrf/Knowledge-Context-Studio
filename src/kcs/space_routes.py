@@ -111,7 +111,7 @@ def space_stats(db: Session, tenant_id: str, space_ids: list[str], person_id: st
 
 
 @router.get("")
-def spaces(tenant_id: str, auth: PersonAuth = Depends(person_auth), db: Session = Depends(get_db)):
+def spaces(tenant_id: str, auth: PersonAuth = Depends(person_auth), db: Session = Depends(get_db, scope="function")):
     member = tenant_membership(db, tenant_id, auth)
     query = select(KnowledgeSpace).where(
         KnowledgeSpace.tenant_id == tenant_id, KnowledgeSpace.active.is_(True)
@@ -133,7 +133,7 @@ def create_space(
     body: SpaceInput,
     request: Request,
     auth: PersonAuth = Depends(person_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     tenant_membership(db, tenant_id, auth, admin=True)
     space = KnowledgeSpace(
@@ -152,7 +152,7 @@ def update_space(
     body: SpaceUpdateInput,
     request: Request,
     auth: PersonAuth = Depends(person_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     tenant_membership(db, tenant_id, auth, admin=True)
     space = scoped_object(db, KnowledgeSpace, tenant_id, space_id)
@@ -164,7 +164,7 @@ def update_space(
 
 @router.get("/{space_id}")
 def get_space(
-    tenant_id: str, space_id: str, auth: PersonAuth = Depends(person_auth), db: Session = Depends(get_db)
+    tenant_id: str, space_id: str, auth: PersonAuth = Depends(person_auth), db: Session = Depends(get_db, scope="function")
 ):
     space = person_space(db, tenant_id, space_id, auth)
     return public_space(space, space_stats(db, tenant_id, [space.id], auth.person.id).get(space.id))
@@ -172,7 +172,7 @@ def get_space(
 
 @router.get("/{space_id}/context")
 def space_context(
-    tenant_id: str, space_id: str, auth: PersonAuth = Depends(person_auth), db: Session = Depends(get_db)
+    tenant_id: str, space_id: str, auth: PersonAuth = Depends(person_auth), db: Session = Depends(get_db, scope="function")
 ):
     """Space-local private and shared resources; default resolves from authentication."""
     space = person_space(db, tenant_id, space_id, auth)
@@ -275,7 +275,7 @@ def search_space(
     body: SpaceSearchInput,
     request: Request,
     auth: PersonAuth = Depends(person_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     """Semantic search inside a single space. Isolation is preserved by
     querying only this space's engine root and verifying every hit against
@@ -338,7 +338,7 @@ def grant_agent(
     body: ActiveInput,
     request: Request,
     auth: PersonAuth = Depends(person_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     tenant_membership(db, tenant_id, auth, admin=True)
     scoped_object(db, KnowledgeSpace, tenant_id, space_id)
@@ -368,7 +368,7 @@ def grant_person(
     body: PersonGrantInput,
     request: Request,
     auth: PersonAuth = Depends(person_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     tenant_membership(db, tenant_id, auth, admin=True)
     scoped_object(db, KnowledgeSpace, tenant_id, space_id)
@@ -396,7 +396,7 @@ def grant_person(
 
 @router.get("/{space_id}/grants")
 def grants(
-    tenant_id: str, space_id: str, auth: PersonAuth = Depends(person_auth), db: Session = Depends(get_db)
+    tenant_id: str, space_id: str, auth: PersonAuth = Depends(person_auth), db: Session = Depends(get_db, scope="function")
 ):
     tenant_membership(db, tenant_id, auth, admin=True)
     scoped_object(db, KnowledgeSpace, tenant_id, space_id)

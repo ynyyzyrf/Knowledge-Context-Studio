@@ -8,6 +8,8 @@
 
 ## 啟動工作台
 
+**完整產品安裝（內建 OpenViking）：[統一安裝與管理指南](docs/bundled-product.md)**。使用 `python scripts/product.py init/build/up`，自動取得固定引擎來源及配置內部服務；無須另一份 OpenViking checkout 或預先匯入本機引擎映像。
+
 **Docker／騰訊雲部署：請按 [Docker 統一部署指南](docs/docker-deployment.md) 執行。** 使用 `compose.deploy.yaml` 統一管理 API／前端、worker、PostgreSQL 與私有引擎；首次需匯入固定引擎映像並初始化雲端設定。下面的 PowerShell 流程供本機開發使用。
 
 完成下方首次設定後，在此目錄執行：

@@ -306,7 +306,7 @@ requires-dist = [
     { name = "alembic", specifier = ">=1.15,<2" },
     { name = "argon2-cffi", specifier = ">=25.1,<26" },
     { name = "cryptography", specifier = ">=44,<50" },
-    { name = "fastapi", specifier = ">=0.115,<1" },
+    { name = "fastapi", specifier = ">=0.141.1,<1" },
     { name = "httpx", specifier = ">=0.28,<1" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2,<4" },
     { name = "pydantic-settings", specifier = ">=2.8,<3" },

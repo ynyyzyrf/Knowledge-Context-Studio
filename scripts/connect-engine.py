@@ -1,6 +1,7 @@
 """Provision/reuse the private publisher account; keep credentials in local .env."""
 
 import json
+import os
 from pathlib import Path
 
 import httpx
@@ -32,4 +33,7 @@ with httpx.Client(base_url=url, headers={"X-API-Key": root}, trust_env=False, ti
         env_path = str(Path(".env").resolve())
         set_key(env_path, "KCS_ENGINE_URL", url)
         set_key(env_path, "KCS_ENGINE_API_KEY", key)
+        if hasattr(os, "geteuid") and os.geteuid() == 0:
+            os.chown(env_path, 10001, 10001)
+            os.chmod(env_path, 0o600)
 print("Private publisher account connected.")

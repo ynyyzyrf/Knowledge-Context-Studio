@@ -27,7 +27,7 @@ class AgentAuth:
     credential_id: str
 
 
-def agent_auth(request: Request, db: Session = Depends(get_db)):
+def agent_auth(request: Request, db: Session = Depends(get_db, scope="function")):
     scheme, _, token = request.headers.get("Authorization", "").partition(" ")
     if scheme.lower() != "bearer" or not token or len(token) > 256:
         raise HTTPException(401, "Agent 憑證無效")
@@ -41,7 +41,7 @@ def agent_auth(request: Request, db: Session = Depends(get_db)):
     return AgentAuth(tenant.id, agent.id, credential.id)
 
 
-def locked_agent_auth(request: Request, auth: AgentAuth = Depends(agent_auth), db: Session = Depends(get_db)):
+def locked_agent_auth(request: Request, auth: AgentAuth = Depends(agent_auth), db: Session = Depends(get_db, scope="function")):
     # Policy mutations use the same lock. Recheck credentials after acquiring it.
     db.scalar(select(Tenant).where(Tenant.id == auth.tenant_id).with_for_update())
     db.expire_all()

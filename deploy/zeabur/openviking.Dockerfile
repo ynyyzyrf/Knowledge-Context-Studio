@@ -74,6 +74,7 @@ COPY --from=web-studio-builder /app/web-studio/dist/ openviking/web_studio/dist/
 COPY --from=source /source/openviking_cli/ openviking_cli/
 COPY --from=source /source/src/ src/
 COPY --from=source /source/third_party/ third_party/
+COPY --from=source /source/LICENSE /usr/share/licenses/openviking/LICENSE
 
 # Install project and dependencies. setup.py packages the copied Studio bundle
 # without running npm again, while build_ext still builds native extensions.

@@ -126,7 +126,7 @@ def list_memories(
     subject_id: str,
     request: Request,
     auth: AgentAuth = Depends(locked_agent_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
 ):

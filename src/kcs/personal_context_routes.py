@@ -156,7 +156,7 @@ class GrantInput(StrictModel):
 
 
 @router.get(HUMAN + "/agent-access")
-def grants(tenant_id: str, space_id: str, kind: Kind, request: Request, db: Session = Depends(get_db)):
+def grants(tenant_id: str, space_id: str, kind: Kind, request: Request, db: Session = Depends(get_db, scope="function")):
     who = identity(request, db, tenant_id, space_id, kind)
     agents = db.scalars(
         select(Agent)
@@ -191,7 +191,7 @@ def set_grant(
     agent_id: str,
     body: GrantInput,
     request: Request,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     who = identity(request, db, tenant_id, space_id, kind, write=True)
     a = db.get(Agent, agent_id)
@@ -224,7 +224,7 @@ def entries(
     offset: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     q: str = Query("", max_length=200),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     who = identity(request, db, tenant_id, space_id, kind)
     filters = list(conditions(who, space_id, kind))
@@ -261,7 +261,7 @@ def create_entry(
     body: EntryInput,
     request: Request,
     tenant_id: str | None = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     who = identity(request, db, tenant_id, space_id, kind, write=True)
     if kind != "sessions" and not body.content.strip():
@@ -331,7 +331,7 @@ def read_entry(
     entry_id: str,
     request: Request,
     tenant_id: str | None = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     who = identity(request, db, tenant_id, space_id, kind)
     row = entry(db, who, space_id, kind, entry_id)
@@ -364,7 +364,7 @@ def edit_entry(
     entry_id: str,
     body: EditInput,
     request: Request,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     who = identity(request, db, tenant_id, space_id, kind, write=True)
     row = entry(db, who, space_id, kind, entry_id)
@@ -390,7 +390,7 @@ def delete_entry(
     entry_id: str,
     body: VersionInput,
     request: Request,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     who = identity(request, db, tenant_id, space_id, kind, write=True)
     row = entry(db, who, space_id, kind, entry_id)
@@ -418,7 +418,7 @@ def reindex_entry(
     entry_id: str,
     body: VersionInput,
     request: Request,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     who = identity(request, db, tenant_id, space_id, kind, write=True)
     row = entry(db, who, space_id, kind, entry_id)
@@ -441,7 +441,7 @@ def messages(
     tenant_id: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     who = identity(request, db, tenant_id, space_id, kind)
     if kind != "sessions":
@@ -474,7 +474,7 @@ def append_message(
     body: MessageInput,
     request: Request,
     tenant_id: str | None = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     who = identity(request, db, tenant_id, space_id, kind, write=True)
     if kind != "sessions":
@@ -512,7 +512,7 @@ def append_message(
 
 @router.get(HUMAN + "/entries/{entry_id}/sources")
 def sources(
-    tenant_id: str, space_id: str, kind: Kind, entry_id: str, request: Request, db: Session = Depends(get_db)
+    tenant_id: str, space_id: str, kind: Kind, entry_id: str, request: Request, db: Session = Depends(get_db, scope="function")
 ):
     who = identity(request, db, tenant_id, space_id, kind)
     row = entry(db, who, space_id, kind, entry_id)

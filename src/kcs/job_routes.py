@@ -45,7 +45,7 @@ def commit_session(
     body: CommitInput,
     request: Request,
     auth: AgentAuth = Depends(locked_agent_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     session = authorized_session(db, auth, session_id)
     receipt = db.get(CommitReceipt, (auth.tenant_id, auth.agent_id, session_id, body.idempotency_key))
@@ -95,7 +95,7 @@ def commit_session(
 
 
 @router.get("/jobs/{job_id}")
-def get_job(job_id: str, auth: AgentAuth = Depends(locked_agent_auth), db: Session = Depends(get_db)):
+def get_job(job_id: str, auth: AgentAuth = Depends(locked_agent_auth), db: Session = Depends(get_db, scope="function")):
     job = db.scalar(
         select(BackgroundJob).where(
             BackgroundJob.id == job_id,
@@ -112,7 +112,7 @@ def get_job(job_id: str, auth: AgentAuth = Depends(locked_agent_auth), db: Sessi
 def tenant_jobs(
     tenant_id: str,
     auth: PersonAuth = Depends(person_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=100),
 ):
@@ -129,7 +129,7 @@ def tenant_jobs(
 
 @router.post("/jobs/{job_id}/retry", status_code=202)
 def retry_job(
-    job_id: str, request: Request, auth: AgentAuth = Depends(locked_agent_auth), db: Session = Depends(get_db)
+    job_id: str, request: Request, auth: AgentAuth = Depends(locked_agent_auth), db: Session = Depends(get_db, scope="function")
 ):
     job = db.scalar(
         select(BackgroundJob)

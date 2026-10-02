@@ -41,7 +41,7 @@ def private_owner(db, auth, space_id):
 
 @router.get("/tenants/{tenant_id}/spaces/{space_id}/user/default/agent-access")
 def access(
-    tenant_id: str, space_id: str, auth: PersonAuth = Depends(person_auth), db: Session = Depends(get_db)
+    tenant_id: str, space_id: str, auth: PersonAuth = Depends(person_auth), db: Session = Depends(get_db, scope="function")
 ):
     person_space(db, tenant_id, space_id, auth)
     rows = (
@@ -83,7 +83,7 @@ def grant(
     agent_id: str,
     body: ActiveInput,
     request: Request,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     auth = lock_permission(db, request, tenant_id, space_id, write=False)
     agent = db.get(Agent, agent_id)

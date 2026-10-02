@@ -62,7 +62,7 @@ def create_session(
     body: SessionInput,
     request: Request,
     auth: AgentAuth = Depends(locked_agent_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     if body.subject_id not in allowed_subject_ids(db, auth):
         raise HTTPException(404, "找不到服務對象")
@@ -101,7 +101,7 @@ def create_session(
 @router.get("")
 def list_sessions(
     auth: AgentAuth = Depends(locked_agent_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=100),
 ):
@@ -123,7 +123,7 @@ def list_sessions(
 def messages(
     session_id: str,
     auth: AgentAuth = Depends(locked_agent_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     after_sequence: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=100),
 ):
@@ -147,7 +147,7 @@ def add_message(
     body: MessageInput,
     request: Request,
     auth: AgentAuth = Depends(locked_agent_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     session = authorized_session(db, auth, session_id)
     row = db.scalar(

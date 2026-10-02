@@ -30,7 +30,7 @@ def folders(
     space_id: str,
     scope: Literal["private", "shared"] = "private",
     auth: PersonAuth = Depends(person_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     person_space(db, tenant_id, space_id, auth)
     paths = db.scalars(
@@ -47,7 +47,7 @@ def folders(
 
 @router.post("", status_code=201)
 def create_folder(
-    tenant_id: str, space_id: str, body: FolderInput, request: Request, db: Session = Depends(get_db)
+    tenant_id: str, space_id: str, body: FolderInput, request: Request, db: Session = Depends(get_db, scope="function")
 ):
     auth = lock_permission(db, request, tenant_id, space_id, write=body.scope == "shared")
     owner_key = auth.person.id if body.scope == "private" else ""

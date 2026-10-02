@@ -98,19 +98,19 @@ def login(body: LoginInput, request: Request, response: Response):
 
 
 @router.get("/auth/me")
-def me(request: Request, auth: PersonAuth = Depends(person_auth), db: Session = Depends(get_db)):
+def me(request: Request, auth: PersonAuth = Depends(person_auth), db: Session = Depends(get_db, scope="function")):
     return profile(db, auth.person, request.cookies.get("kcs_csrf"))
 
 
 @router.post("/auth/logout", status_code=204)
-def logout(response: Response, auth: PersonAuth = Depends(person_auth), db: Session = Depends(get_db)):
+def logout(response: Response, auth: PersonAuth = Depends(person_auth), db: Session = Depends(get_db, scope="function")):
     db.delete(auth.session)
     response.delete_cookie("kcs_session", path="/")
     response.delete_cookie("kcs_csrf", path="/")
 
 
 @router.get("/tenants/{tenant_id}/members")
-def members(tenant_id: str, auth: PersonAuth = Depends(person_auth), db: Session = Depends(get_db)):
+def members(tenant_id: str, auth: PersonAuth = Depends(person_auth), db: Session = Depends(get_db, scope="function")):
     tenant_membership(db, tenant_id, auth)
     rows = db.execute(select(Membership, Person).join(Person).where(Membership.tenant_id == tenant_id)).all()
     return {
@@ -124,7 +124,7 @@ def add_member(
     body: MemberInput,
     request: Request,
     auth: PersonAuth = Depends(person_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     tenant_membership(db, tenant_id, auth, admin=True)
     db.scalar(select(Tenant).where(Tenant.id == tenant_id).with_for_update())
@@ -156,7 +156,7 @@ def update_member(
     body: MemberUpdate,
     request: Request,
     auth: PersonAuth = Depends(person_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     tenant_membership(db, tenant_id, auth, admin=True)
     tenant = db.scalar(select(Tenant).where(Tenant.id == tenant_id).with_for_update())
@@ -195,7 +195,7 @@ def add_existing_member(
     body: ExistingMemberInput,
     request: Request,
     auth: PersonAuth = Depends(person_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     tenant_membership(db, tenant_id, auth, admin=True)
     person = db.scalar(
@@ -220,7 +220,7 @@ def add_existing_member(
 
 
 @router.get("/tenants/{tenant_id}/audit")
-def audit(tenant_id: str, auth: PersonAuth = Depends(person_auth), db: Session = Depends(get_db)):
+def audit(tenant_id: str, auth: PersonAuth = Depends(person_auth), db: Session = Depends(get_db, scope="function")):
     tenant_membership(db, tenant_id, auth, admin=True)
     events = db.scalars(
         select(AuditEvent)

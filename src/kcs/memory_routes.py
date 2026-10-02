@@ -113,7 +113,7 @@ def approve(
     body: VersionInput,
     request: Request,
     auth: PersonAuth = Depends(person_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     tenant_membership(db, tenant_id, auth, admin=True)
     candidate = scoped_object(db, MemoryCandidate, tenant_id, candidate_id)
@@ -151,7 +151,7 @@ def reject(
     body: ReasonInput,
     request: Request,
     auth: PersonAuth = Depends(person_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     tenant_membership(db, tenant_id, auth, admin=True)
     candidate = scoped_object(db, MemoryCandidate, tenant_id, candidate_id)
@@ -178,7 +178,7 @@ def retry_publication(
     body: VersionInput,
     request: Request,
     auth: PersonAuth = Depends(person_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     tenant_membership(db, tenant_id, auth, admin=True)
     memory = scoped_object(db, MemoryRecord, tenant_id, memory_id)
@@ -213,7 +213,7 @@ def edit_memory(
     body: EditInput,
     request: Request,
     auth: PersonAuth = Depends(person_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     tenant_membership(db, tenant_id, auth, admin=True)
     memory = mutable_memory(db, tenant_id, memory_id, body)
@@ -276,7 +276,7 @@ def disable(
     body: ReasonInput,
     request: Request,
     auth: PersonAuth = Depends(person_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     return stop_memory(db, tenant_id, memory_id, body, request, auth, delete=False)
 
@@ -288,7 +288,7 @@ def delete_memory(
     body: ReasonInput,
     request: Request,
     auth: PersonAuth = Depends(person_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     return stop_memory(db, tenant_id, memory_id, body, request, auth, delete=True)
 
@@ -300,7 +300,7 @@ def cognition(
     subject_id: str,
     request: Request,
     auth: PersonAuth = Depends(person_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=100),
     candidates_offset: int | None = Query(default=None, ge=0),
@@ -361,7 +361,7 @@ def candidate_provenance(
     candidate_id: str,
     request: Request,
     auth: PersonAuth = Depends(person_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     tenant_membership(db, tenant_id, auth, admin=True)
     candidate = scoped_object(db, MemoryCandidate, tenant_id, candidate_id)
@@ -396,7 +396,7 @@ def provenance(
     memory_id: str,
     request: Request,
     auth: PersonAuth = Depends(person_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     tenant_membership(db, tenant_id, auth, admin=True)
     memory = scoped_object(db, MemoryRecord, tenant_id, memory_id)
