@@ -1,0 +1,7 @@
+[mcp_servers.mag-kb]
+command = "node"
+args = ["<MAG_KB_MCP_ROOT>/server.mjs"]
+env_vars = ["MAG_KB_TOKEN"]
+
+[mcp_servers.mag-kb.env]
+MAG_KB_BASE_URL = "https://YOUR-KCS-HOST"

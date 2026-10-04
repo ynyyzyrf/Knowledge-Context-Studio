@@ -153,10 +153,17 @@ class MessageInput(StrictModel):
 class GrantInput(StrictModel):
     can_read: bool
     can_write: bool
+    auto_store: bool = False
 
 
 @router.get(HUMAN + "/agent-access")
-def grants(tenant_id: str, space_id: str, kind: Kind, request: Request, db: Session = Depends(get_db, scope="function")):
+def grants(
+    tenant_id: str,
+    space_id: str,
+    kind: Kind,
+    request: Request,
+    db: Session = Depends(get_db, scope="function"),
+):
     who = identity(request, db, tenant_id, space_id, kind)
     agents = db.scalars(
         select(Agent)
@@ -178,6 +185,7 @@ def grants(tenant_id: str, space_id: str, kind: Kind, request: Request, db: Sess
                 "name": a.name,
                 "can_read": bool(g and g.can_read),
                 "can_write": bool(g and g.can_write),
+                "auto_store": bool(g and g.auto_store),
             }
         )
     return {"items": items}
@@ -194,6 +202,8 @@ def set_grant(
     db: Session = Depends(get_db, scope="function"),
 ):
     who = identity(request, db, tenant_id, space_id, kind, write=True)
+    if body.auto_store and (kind != "memories" or not body.can_write):
+        raise HTTPException(422, "自動存儲僅適用於已授權寫入的記憶目錄")
     a = db.get(Agent, agent_id)
     g = db.get(AgentSpaceGrant, (tenant_id, space_id, agent_id))
     if (
@@ -210,6 +220,7 @@ def set_grant(
         )
         db.add(row)
     row.can_read, row.can_write = body.can_read, body.can_write
+    row.auto_store = body.auto_store
     audit(db, request, who, kind + ".grant", agent_id, {"space_id": space_id, **body.model_dump()})
     return body.model_dump()
 
@@ -281,7 +292,17 @@ def create_entry(
         if old.input_hash != fingerprint or old.status == "deleted":
             raise HTTPException(409, "此請求識別碼已使用，請使用新的 external_id")
         # Never return subsequently edited content through a write-only Agent grant.
-        return {"id": old.id, "status": old.status, "version": old.version, "replayed": True}
+        return {
+            "id": old.id,
+            "status": old.status,
+            "version": old.version,
+            "replayed": True,
+            "storage": {"outcome": "replayed", "reason": "idempotent_replay"},
+            "indexing": {
+                "state": index_status(old, request.app.state.settings),
+                "error_code": old.embedding_error,
+            },
+        }
     if body.source_message_ids:
         if kind != "memories":
             raise HTTPException(422, "只有記憶可以引用會話訊息")
@@ -303,6 +324,10 @@ def create_entry(
     )
     if count >= 1000:
         raise HTTPException(413, "此個人目錄上限為 1,000 筆")
+    auto_store = False
+    if who[3] and kind == "memories":
+        g = db.get(NamespaceScopeGrant, (who[0], space_id, who[1], who[2].split(":", 1)[1], kind))
+        auto_store = bool(g and g.can_write and g.auto_store)
     row = NamespaceEntry(
         tenant_id=who[0],
         space_id=space_id,
@@ -314,13 +339,23 @@ def create_entry(
         external_id=body.external_id,
         input_hash=fingerprint,
         source_message_ids=body.source_message_ids,
-        status="active" if kind == "sessions" else "pending",
+        status="active" if kind == "sessions" or auto_store else "pending",
     )
     db.add(row)
     db.flush()
     revision(db, row, who[2])
     audit(db, request, who, kind + ".created", row.id)
-    return payload(row, settings=request.app.state.settings)
+    return {
+        **payload(row, settings=request.app.state.settings),
+        "storage": {
+            "outcome": "created" if row.status == "active" else "review_required",
+            "reason": "automatic_policy"
+            if auto_store
+            else "session_created"
+            if kind == "sessions"
+            else "manual_policy",
+        },
+    }
 
 
 @router.get(HUMAN + "/entries/{entry_id}")
@@ -512,7 +547,12 @@ def append_message(
 
 @router.get(HUMAN + "/entries/{entry_id}/sources")
 def sources(
-    tenant_id: str, space_id: str, kind: Kind, entry_id: str, request: Request, db: Session = Depends(get_db, scope="function")
+    tenant_id: str,
+    space_id: str,
+    kind: Kind,
+    entry_id: str,
+    request: Request,
+    db: Session = Depends(get_db, scope="function"),
 ):
     who = identity(request, db, tenant_id, space_id, kind)
     row = entry(db, who, space_id, kind, entry_id)

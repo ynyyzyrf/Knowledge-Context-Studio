@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "mag-kb": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "<MAG_KB_MCP_ROOT>/server.mjs"
+      ],
+      "env": {
+        "MAG_KB_BASE_URL": "https://YOUR-KCS-HOST",
+        "MAG_KB_TOKEN": "${MAG_KB_TOKEN}"
+      }
+    }
+  }
+}

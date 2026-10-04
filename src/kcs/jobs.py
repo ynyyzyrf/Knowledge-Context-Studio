@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy import and_, or_, select
 
+from .memory_storage import create_revision
 from .model_service import ModelService, ModelServiceError
 from .models import (
     Agent,
@@ -17,6 +18,8 @@ from .models import (
     ConversationMessage,
     CredentialSubject,
     MemoryCandidate,
+    MemoryRecord,
+    MemoryRevision,
     Subject,
     Tenant,
 )
@@ -165,23 +168,89 @@ def complete(database, lease, memories, input_tokens, output_tokens):
         if not authorized(db, job):
             fail_row(job, "authorization_revoked")
             return False
-        valid_ids = {row.id for row in snapshot(db, job)}
+        sources = {row.id: row for row in snapshot(db, job)}
+        valid_ids = set(sources)
         # Validate again at persistence boundary, including worker callers.
         parsed = Extraction.model_validate({"memories": memories})
         if any(not set(memory.source_message_ids) <= valid_ids for memory in parsed.memories):
             raise ExtractionFailure("extraction_invalid_response")
-        for ordinal, memory in enumerate(parsed.memories):
-            db.add(
-                MemoryCandidate(
-                    tenant_id=job.tenant_id,
-                    agent_id=job.agent_id,
-                    subject_id=job.subject_id,
-                    job_id=job.id,
-                    ordinal=ordinal,
-                    content=memory.content,
-                    source_message_ids=memory.source_message_ids,
+        job.storage_policy = db.get(Agent, job.agent_id).memory_policy
+        existing = {}
+        removed_sources = set()
+        if job.storage_policy == "automatic":
+            for record, revision in db.execute(
+                select(MemoryRecord, MemoryRevision)
+                .join(
+                    MemoryRevision,
+                    (MemoryRevision.memory_id == MemoryRecord.id)
+                    & (MemoryRevision.version == MemoryRecord.current_version),
                 )
+                .where(
+                    MemoryRecord.tenant_id == job.tenant_id,
+                    MemoryRecord.agent_id == job.agent_id,
+                    MemoryRecord.subject_id == job.subject_id,
+                )
+            ):
+                if record.status in ("disabled", "deleted"):
+                    removed_sources.update(revision.source_message_ids)
+                else:
+                    existing[" ".join((revision.content or "").split())] = record.id
+        for ordinal, memory in enumerate(parsed.memories):
+            candidate = MemoryCandidate(
+                tenant_id=job.tenant_id,
+                agent_id=job.agent_id,
+                subject_id=job.subject_id,
+                job_id=job.id,
+                ordinal=ordinal,
+                content=memory.content,
+                source_message_ids=memory.source_message_ids,
             )
+            db.add(candidate)
+            candidate.storage_outcome, candidate.storage_reason = "review_required", "manual_policy"
+            if job.storage_policy != "automatic":
+                continue
+            if removed_sources.intersection(memory.source_message_ids):
+                candidate.status = "rejected"
+                candidate.storage_outcome, candidate.storage_reason = "ignored", "source_previously_removed"
+                candidate.content = ""
+                continue
+            if not all(sources[source].role == "user" for source in memory.source_message_ids):
+                candidate.storage_reason = "user_source_required"
+                continue
+            key = " ".join(memory.content.split())
+            if not key:
+                candidate.status = "rejected"
+                candidate.storage_outcome, candidate.storage_reason = "ignored", "empty_content"
+                continue
+            if key in existing:
+                candidate.status = "rejected"
+                candidate.storage_outcome, candidate.storage_reason = "deduplicated", "exact_duplicate"
+                candidate.duplicate_of = existing[key]
+                # Keep provenance but avoid retaining a second copy after source memory deletion.
+                candidate.content = ""
+                continue
+            db.flush()
+            record = MemoryRecord(
+                tenant_id=job.tenant_id,
+                agent_id=job.agent_id,
+                subject_id=job.subject_id,
+                candidate_id=candidate.id,
+            )
+            db.add(record)
+            db.flush()
+            create_revision(
+                db,
+                record,
+                actor_id="worker",
+                request_id=job.request_id,
+                content=memory.content,
+                sources=memory.source_message_ids,
+                status="pending",
+                reason="Automatic storage policy",
+            )
+            candidate.status, candidate.version = "approved", candidate.version + 1
+            candidate.storage_outcome, candidate.storage_reason = "created", "automatic_policy"
+            existing[key] = record.id
         job.state, job.error_code, job.updated_at = "succeeded", None, time.time()
         job.input_tokens, job.output_tokens = input_tokens, output_tokens
         job.lease_token, job.lease_until = None, None

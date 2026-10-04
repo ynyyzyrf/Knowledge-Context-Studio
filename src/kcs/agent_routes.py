@@ -1,5 +1,6 @@
 import secrets
 import time
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import Field
@@ -7,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .auth_routes import StrictModel
+from .harness_configs import harness_configs
 from .models import (
     Agent,
     AgentCredential,
@@ -31,13 +33,20 @@ class ActiveInput(StrictModel):
     active: bool
 
 
+class MemoryPolicyInput(StrictModel):
+    mode: Literal["manual", "automatic"]
+
+
 class CredentialInput(StrictModel):
     subject_ids: list[str] = Field(min_length=1, max_length=100)
     expires_in_days: int = Field(default=30, ge=1, le=365)
 
 
 def public_entity(obj):
-    return {"id": obj.id, "name": obj.name, "active": obj.active}
+    result = {"id": obj.id, "name": obj.name, "active": obj.active}
+    if isinstance(obj, Agent):
+        result["memory_policy"] = obj.memory_policy
+    return result
 
 
 def mcp_package(request, credential, token):
@@ -47,6 +56,7 @@ def mcp_package(request, credential, token):
         "credentialId": credential.id,
         "token": token,
         "expiresAt": credential.expires_at,
+        "harnesses": harness_configs(base_url),
         "mcpServer": {
             "mag-kb": {
                 "command": "node",
@@ -109,6 +119,7 @@ def machine_identity(auth: AgentAuth = Depends(agent_auth), db: Session = Depend
         "tenant_id": auth.tenant_id,
         "agent_id": auth.agent_id,
         "credential_id": auth.credential_id,
+        "memory_policy": db.get(Agent, auth.agent_id).memory_policy,
         "subject_ids": allowed_subject_ids(db, auth),
         "space_ids": allowed_space_ids(db, auth),
     }
@@ -163,7 +174,9 @@ def machine_spaces(auth: AgentAuth = Depends(agent_auth), db: Session = Depends(
 
 
 @router.get("/tenants/{tenant_id}/agents")
-def agents(tenant_id: str, auth: PersonAuth = Depends(person_auth), db: Session = Depends(get_db, scope="function")):
+def agents(
+    tenant_id: str, auth: PersonAuth = Depends(person_auth), db: Session = Depends(get_db, scope="function")
+):
     tenant_membership(db, tenant_id, auth, admin=True)
     rows = db.scalars(select(Agent).where(Agent.tenant_id == tenant_id).order_by(Agent.id))
     return {"items": [public_entity(row) for row in rows]}
@@ -201,9 +214,28 @@ def update_agent(
     return public_entity(agent)
 
 
+@router.put("/tenants/{tenant_id}/agents/{agent_id}/memory-policy")
+def set_memory_policy(
+    tenant_id: str,
+    agent_id: str,
+    body: MemoryPolicyInput,
+    request: Request,
+    auth: PersonAuth = Depends(person_auth),
+    db: Session = Depends(get_db, scope="function"),
+):
+    tenant_membership(db, tenant_id, auth, admin=True)
+    agent = scoped_object(db, Agent, tenant_id, agent_id)
+    agent.memory_policy = body.mode
+    record(db, request, auth, tenant_id, "agent.memory_policy", agent.id, {"mode": body.mode})
+    return public_entity(agent)
+
+
 @router.get("/tenants/{tenant_id}/agents/{agent_id}/subjects")
 def subjects(
-    tenant_id: str, agent_id: str, auth: PersonAuth = Depends(person_auth), db: Session = Depends(get_db, scope="function")
+    tenant_id: str,
+    agent_id: str,
+    auth: PersonAuth = Depends(person_auth),
+    db: Session = Depends(get_db, scope="function"),
 ):
     tenant_membership(db, tenant_id, auth, admin=True)
     scoped_object(db, Agent, tenant_id, agent_id)
@@ -252,7 +284,10 @@ def update_subject(
 
 @router.get("/tenants/{tenant_id}/agents/{agent_id}/credentials")
 def credentials(
-    tenant_id: str, agent_id: str, auth: PersonAuth = Depends(person_auth), db: Session = Depends(get_db, scope="function")
+    tenant_id: str,
+    agent_id: str,
+    auth: PersonAuth = Depends(person_auth),
+    db: Session = Depends(get_db, scope="function"),
 ):
     tenant_membership(db, tenant_id, auth, admin=True)
     scoped_object(db, Agent, tenant_id, agent_id)

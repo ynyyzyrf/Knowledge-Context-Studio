@@ -78,6 +78,7 @@ class Agent(Base):
     tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
     name: Mapped[str] = mapped_column(String(160))
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+    memory_policy: Mapped[str] = mapped_column(String(16), default="manual", server_default="manual")
 
 
 class Subject(Base):
@@ -334,6 +335,7 @@ class BackgroundJob(Base):
     updated_at: Mapped[float] = mapped_column(Float, default=time.time)
     input_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    storage_policy: Mapped[str | None] = mapped_column(String(16), nullable=True)
 
 
 class CommitReceipt(Base):
@@ -393,6 +395,9 @@ class MemoryCandidate(Base):
     status: Mapped[str] = mapped_column(String(16), default="candidate")
     version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
     created_at: Mapped[float] = mapped_column(Float, default=time.time)
+    storage_outcome: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    storage_reason: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    duplicate_of: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
 
 class MemoryRecord(Base):
@@ -567,3 +572,4 @@ class NamespaceScopeGrant(Base):
     kind: Mapped[str] = mapped_column(String(16), primary_key=True)
     can_read: Mapped[bool] = mapped_column(Boolean, default=False)
     can_write: Mapped[bool] = mapped_column(Boolean, default=False)
+    auto_store: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")

@@ -91,6 +91,39 @@ def test_mcp_context_paraphrase_and_revocation(app):
             grant(admin, human, agent, read=False)
             body = json.loads(rpc(3, "tools/call", args)["content"][0]["text"])
             assert body["personal_context"] == [] and "來源連結" not in body["context"]
+            submitted = json.loads(
+                rpc(
+                    4,
+                    "tools/call",
+                    {
+                        "name": "kb_submit_memory_candidate",
+                        "arguments": {
+                            "subject_id": subject["id"],
+                            "content": "Acknowledged",
+                            "idempotency_key": "r" * 128,
+                        },
+                    },
+                )["content"][0]["text"]
+            )
+            job_id = submitted["job"]["id"]
+            response = rpc(5, "tools/call", {"name": "kb_job_result", "arguments": {"job_id": job_id}})
+            assert not response.get("isError"), response
+            waiting = json.loads(response["content"][0]["text"])
+            assert waiting["result"]["pipeline_state"] == "waiting"
+            from kcs.jobs import run_one
+            from kcs.model_service import ChatResult
+
+            run_one(
+                app.state.database,
+                app.state.settings,
+                complete_chat=lambda _: ChatResult('{"memories":[]}', 1, 1),
+            )
+            completed = json.loads(
+                rpc(6, "tools/call", {"name": "kb_job_result", "arguments": {"job_id": job_id}})["content"][
+                    0
+                ]["text"]
+            )
+            assert completed["result"]["reason"] == "no_durable_facts"
         finally:
             if process is not None:
                 process.terminate()

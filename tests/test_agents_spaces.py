@@ -48,9 +48,23 @@ def test_credential_rotation_disable_and_no_secret_listing(app):
         assert credential["token"] not in listed.text and "token_hash" not in listed.text
         assert credential["mcp"]["mcpServer"]["mag-kb"]["env"]["MAG_KB_TOKEN"] == credential["token"]
         assert credential["mcp"]["mcpServer"]["mag-kb"]["env"]["MAG_KB_BASE_URL"] == "http://localhost:8088"
+        assert {row["id"] for row in credential["mcp"]["harnesses"]} == {
+            "codex",
+            "claude-code",
+            "openclaw",
+            "hermes",
+        }
+        assert all(credential["token"] not in row["config"] for row in credential["mcp"]["harnesses"])
         rotated = create(admin, base + f"/credentials/{credential['id']}/rotate", {})
         assert rotated["mcp"]["credentialId"] == rotated["id"]
         assert rotated["mcp"]["token"] == rotated["token"]
+        assert {row["id"] for row in rotated["mcp"]["harnesses"]} == {
+            "codex",
+            "claude-code",
+            "openclaw",
+            "hermes",
+        }
+        assert all(rotated["token"] not in row["config"] for row in rotated["mcp"]["harnesses"])
         assert machine.get("/v1/agent/me").status_code == 401
         machine.headers["Authorization"] = "Bearer " + rotated["token"]
         assert machine.get("/v1/agent/me").status_code == 200
@@ -226,7 +240,10 @@ def test_space_context_tree_does_not_alias_subjects_as_current_user(app):
         agent, _subject, _ = setup_agent(admin, tenant)
         base = f"/v1/tenants/{tenant}"
         space = create(admin, base + "/spaces", {"name": "K"})
-        assert admin.put(base + f"/spaces/{space['id']}/agents/{agent['id']}", json={"active": True}).status_code == 200
+        assert (
+            admin.put(base + f"/spaces/{space['id']}/agents/{agent['id']}", json={"active": True}).status_code
+            == 200
+        )
         context = admin.get(base + f"/spaces/{space['id']}/context").json()
         assert [a["agent_id"] for a in context["agents"]] == [agent["id"]]
         assert context["subjects"] == []
@@ -257,7 +274,10 @@ def test_space_search_returns_only_verified_chunks(app):
         base = f"/v1/tenants/{tenant}"
         agent, _, _ = setup_agent(admin, tenant)
         space = create(admin, base + "/spaces", {"name": "K"})
-        assert admin.put(base + f"/spaces/{space['id']}/agents/{agent['id']}", json={"active": True}).status_code == 200
+        assert (
+            admin.put(base + f"/spaces/{space['id']}/agents/{agent['id']}", json={"active": True}).status_code
+            == 200
+        )
         person_id = admin.get(base + "/members").json()["items"][0]["person_id"]
         with app.state.database.sessions.begin() as db:
             document = Document(

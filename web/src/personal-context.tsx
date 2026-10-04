@@ -346,7 +346,9 @@ function EntryReader({
     setIndexBusy(true);
     setIndexError(undefined);
     try {
-      await write(`${base}/entries/${id}/reindex`, "POST", { version: data.data.version });
+      await write(`${base}/entries/${id}/reindex`, "POST", {
+        version: data.data.version,
+      });
     } catch (error) {
       setIndexError(error);
     } finally {
@@ -359,18 +361,35 @@ function EntryReader({
         <>
           <h3>{data.data.title}</h3>
           {indexError ? <Problem error={indexError} /> : null}
-          {kind !== "sessions" && data.data.status === "active" && data.data.indexing && (
-            <Space wrap style={{ marginBottom: 12 }}>
-              <Tag color={data.data.indexing.state === "ready" ? "green" : "gold"}>
-                {{ ready: "語意索引已就緒", pending: "等待語意索引", running: "語意索引中", retry: "語意索引稍後重試", failed: "語意索引失敗", inactive: "語意索引未啟用" }[data.data.indexing.state] || "等待語意索引"}
-              </Tag>
-              {data.data.indexing.state !== "ready" && <span className="muted">目前仍可用關鍵字檢索。</span>}
-              {data.data.indexing.state === "failed" && (
-                <Button loading={indexBusy} onClick={() => void retryIndex()}>重試索引</Button>
-              )}
-              <Button onClick={() => void data.refetch()}>刷新狀態</Button>
-            </Space>
-          )}
+          {kind !== "sessions" &&
+            data.data.status === "active" &&
+            data.data.indexing && (
+              <Space wrap style={{ marginBottom: 12 }}>
+                <Tag
+                  color={
+                    data.data.indexing.state === "ready" ? "green" : "gold"
+                  }
+                >
+                  {{
+                    ready: "語意索引已就緒",
+                    pending: "等待語意索引",
+                    running: "語意索引中",
+                    retry: "語意索引稍後重試",
+                    failed: "語意索引失敗",
+                    inactive: "語意索引未啟用",
+                  }[data.data.indexing.state] || "等待語意索引"}
+                </Tag>
+                {data.data.indexing.state !== "ready" && (
+                  <span className="muted">目前仍可用關鍵字檢索。</span>
+                )}
+                {data.data.indexing.state === "failed" && (
+                  <Button loading={indexBusy} onClick={() => void retryIndex()}>
+                    重試索引
+                  </Button>
+                )}
+                <Button onClick={() => void data.refetch()}>刷新狀態</Button>
+              </Space>
+            )}
           <Space wrap>
             <Tag>{statuses[data.data.status]}</Tag>
             <span>v{data.data.version}</span>
@@ -592,6 +611,7 @@ function NamespaceAccess({ base }: { base: string }) {
       name: string;
       can_read: boolean;
       can_write: boolean;
+      auto_store: boolean;
     }[];
   }>(`${base}/agent-access`);
   const write = useWrite();
@@ -601,7 +621,7 @@ function NamespaceAccess({ base }: { base: string }) {
     <>
       <p className="muted">
         分別授予此目錄的讀取及提交權限；只適用於綁定你的 Token，且 Agent
-        必須同時具有此空間權限。提交權不包含審核、修改或刪除記憶／Skill。
+        必須同時具有此空間權限。記憶可另行開啟自動存儲，完整保存提交內容；不會自動收集對話。
       </p>
       {error ? <Problem error={error} /> : null}
       <Load query={data}>
@@ -611,8 +631,19 @@ function NamespaceAccess({ base }: { base: string }) {
           pagination={false}
           columns={[
             { title: "Agent", dataIndex: "name" },
-            ...(["can_read", "can_write"] as const).map((key) => ({
-              title: key === "can_read" ? "讀取" : "提交",
+            ...(
+              [
+                "can_read",
+                "can_write",
+                ...(base.endsWith("/memories") ? ["auto_store" as const] : []),
+              ] as const
+            ).map((key) => ({
+              title:
+                key === "can_read"
+                  ? "讀取"
+                  : key === "auto_store"
+                    ? "自動存儲"
+                    : "提交",
               key,
               render: (
                 _: unknown,
@@ -621,12 +652,13 @@ function NamespaceAccess({ base }: { base: string }) {
                   name: string;
                   can_read: boolean;
                   can_write: boolean;
+                  auto_store: boolean;
                 },
               ) => (
                 <Switch
-                  aria-label={`${key === "can_read" ? "讀取" : "提交"} ${a.name}`}
+                  aria-label={`${key === "can_read" ? "讀取" : key === "auto_store" ? "自動存儲" : "提交"} ${a.name}`}
                   checked={a[key]}
-                  disabled={busy}
+                  disabled={busy || (key === "auto_store" && !a.can_write)}
                   onChange={async (value) => {
                     setBusy(true);
                     setError(undefined);
@@ -634,6 +666,8 @@ function NamespaceAccess({ base }: { base: string }) {
                       await write(`${base}/agent-access/${a.agent_id}`, "PUT", {
                         can_read: a.can_read,
                         can_write: a.can_write,
+                        auto_store:
+                          key === "can_write" && !value ? false : a.auto_store,
                         [key]: value,
                       });
                     } catch (e) {

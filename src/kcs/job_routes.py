@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .auth_routes import StrictModel
+from .job_results import job_result
 from .models import AuditEvent, BackgroundJob, CommitReceipt
 from .policy import AgentAuth, allowed_subject_ids, locked_agent_auth
 from .security import PersonAuth, get_db, person_auth, tenant_membership
@@ -18,11 +19,12 @@ class CommitInput(StrictModel):
     idempotency_key: str = Field(min_length=1, max_length=128)
 
 
-def job_payload(row):
-    return {
+def job_payload(row, db):
+    result = {
         key: getattr(row, key)
         for key in (
             "id",
+            "agent_id",
             "session_id",
             "subject_id",
             "kind",
@@ -37,6 +39,8 @@ def job_payload(row):
             "request_id",
         )
     }
+    result["result"] = job_result(db, row)
+    return result
 
 
 @router.post("/sessions/{session_id}/commit", status_code=202)
@@ -50,7 +54,7 @@ def commit_session(
     session = authorized_session(db, auth, session_id)
     receipt = db.get(CommitReceipt, (auth.tenant_id, auth.agent_id, session_id, body.idempotency_key))
     if receipt:
-        return job_payload(db.get(BackgroundJob, receipt.job_id))
+        return job_payload(db.get(BackgroundJob, receipt.job_id), db)
     if session.message_count == 0:
         raise HTTPException(409, "會話沒有可提取的訊息")
     job = db.scalar(
@@ -91,11 +95,13 @@ def commit_session(
             job_id=job.id,
         )
     )
-    return job_payload(job)
+    return job_payload(job, db)
 
 
 @router.get("/jobs/{job_id}")
-def get_job(job_id: str, auth: AgentAuth = Depends(locked_agent_auth), db: Session = Depends(get_db, scope="function")):
+def get_job(
+    job_id: str, auth: AgentAuth = Depends(locked_agent_auth), db: Session = Depends(get_db, scope="function")
+):
     job = db.scalar(
         select(BackgroundJob).where(
             BackgroundJob.id == job_id,
@@ -105,7 +111,7 @@ def get_job(job_id: str, auth: AgentAuth = Depends(locked_agent_auth), db: Sessi
     )
     if not job or job.subject_id not in allowed_subject_ids(db, auth):
         raise HTTPException(404, "找不到任務")
-    return job_payload(job)
+    return job_payload(job, db)
 
 
 @router.get("/tenants/{tenant_id}/jobs")
@@ -124,12 +130,15 @@ def tenant_jobs(
         .offset(offset)
         .limit(limit)
     )
-    return {"items": [job_payload(row) for row in rows]}
+    return {"items": [job_payload(row, db) for row in rows]}
 
 
 @router.post("/jobs/{job_id}/retry", status_code=202)
 def retry_job(
-    job_id: str, request: Request, auth: AgentAuth = Depends(locked_agent_auth), db: Session = Depends(get_db, scope="function")
+    job_id: str,
+    request: Request,
+    auth: AgentAuth = Depends(locked_agent_auth),
+    db: Session = Depends(get_db, scope="function"),
 ):
     job = db.scalar(
         select(BackgroundJob)
@@ -157,4 +166,4 @@ def retry_job(
             request_id=request.state.request_id,
         )
     )
-    return job_payload(job)
+    return job_payload(job, db)

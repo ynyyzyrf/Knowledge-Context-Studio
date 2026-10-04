@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from .agent_routes import record, subject_for_agent
 from .auth_routes import StrictModel
+from .memory_storage import create_revision
 from .models import (
     Agent,
     AuditEvent,
@@ -67,43 +68,16 @@ def payload(db, memory):
 
 
 def new_revision(db, memory, auth, request, *, content, sources, status, reason):
-    # Mark pending older operations obsolete. Running operations require completion fencing in the publisher.
-    db.execute(
-        update(MemoryProjection)
-        .where(
-            MemoryProjection.memory_id == memory.id,
-            MemoryProjection.kind == "upsert",
-            MemoryProjection.state.in_(["pending", "retry", "succeeded", "failed"]),
-        )
-        .values(state="obsolete")
-    )
-    revision = MemoryRevision(
-        memory_id=memory.id,
-        version=memory.current_version,
-        tenant_id=memory.tenant_id,
-        agent_id=memory.agent_id,
-        subject_id=memory.subject_id,
+    create_revision(
+        db,
+        memory,
+        actor_id=auth.person.id,
+        request_id=request.state.request_id,
         content=content,
-        source_message_ids=sources,
+        sources=sources,
         status=status,
         reason=reason,
-        actor_id=auth.person.id,
     )
-    db.add(revision)
-    db.flush()
-    db.add(
-        MemoryProjection(
-            tenant_id=memory.tenant_id,
-            agent_id=memory.agent_id,
-            subject_id=memory.subject_id,
-            memory_id=memory.id,
-            version=memory.current_version,
-            kind="upsert" if status == "pending" else "delete",
-            request_id=request.state.request_id,
-        )
-    )
-    memory.status, memory.updated_at = status, time.time()
-    db.flush()
 
 
 @router.post("/candidates/{candidate_id}/approve", status_code=202)

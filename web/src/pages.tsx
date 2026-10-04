@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { jobIsRunning, jobSummary, resultLabels } from "./job-results";
 import {
   Alert,
   Button,
@@ -273,6 +274,45 @@ function AgentDetail({ agent, close }: { agent: Entity; close: () => void }) {
       <Tabs
         items={[
           {
+            key: "memory-policy",
+            label: "自動存儲",
+            children: (
+              <>
+                <p>
+                  服務對象記憶：
+                  {agent.memory_policy === "automatic"
+                    ? "自動存儲"
+                    : "人工審核"}
+                </p>
+                <p className="muted">
+                  處理已提交並確認提取的會話。一般記憶自動入庫，來源不足保留審核。個人目錄由擁有者另行授權。
+                </p>
+                <Button
+                  onClick={() =>
+                    forms.open({
+                      title: "設定服務對象記憶存儲",
+                      fields: [
+                        {
+                          name: "mode",
+                          label: "處理方式",
+                          type: "select",
+                          options: [
+                            { value: "automatic", label: "自動存儲" },
+                            { value: "manual", label: "人工審核" },
+                          ],
+                        },
+                      ],
+                      submit: (values) =>
+                        write(base + "/memory-policy", "PUT", values),
+                    })
+                  }
+                >
+                  設定存儲方式
+                </Button>
+              </>
+            ),
+          },
+          {
             key: "subjects",
             label: "服務對象",
             children: (
@@ -505,7 +545,21 @@ function AgentDetail({ agent, close }: { agent: Entity; close: () => void }) {
         </Typography.Paragraph>
         {issued?.mcp && (
           <>
-            <h4>Hermes MCP 配置</h4>
+            <h4>Harness 接入配置</h4>
+            <p>先部署完整 MCP 套件，替換配置中的路徑，並在宿主進程設定下方環境變數。合併既有配置後重啟宿主；首次接入讀取 kb_guide，再用 kb_health 驗證授權。</p>
+            {issued.mcp.harnesses?.length ? (
+              <Tabs items={issued.mcp.harnesses.map((harness) => ({
+                key: harness.id,
+                label: harness.name,
+                children: <>
+                  <p>{harness.path}</p>
+                  <p>{harness.note}</p>
+                  <Typography.Paragraph className="secret" copyable={{ text: harness.config }}>
+                    <pre>{harness.config}</pre>
+                  </Typography.Paragraph>
+                </>,
+              }))} />
+            ) : (
             <Typography.Paragraph
               className="secret"
               copyable={{
@@ -514,6 +568,7 @@ function AgentDetail({ agent, close }: { agent: Entity; close: () => void }) {
             >
               <pre>{JSON.stringify(issued.mcp.mcpServer, null, 2)}</pre>
             </Typography.Paragraph>
+            )}
             <h4>環境變數</h4>
             <Typography.Paragraph
               className="secret"
@@ -649,25 +704,19 @@ export function Jobs() {
   const data = useData<Items<Job>>(
     `/jobs?offset=${offset}&limit=50`,
     true,
-    (result) =>
-      poll &&
-      !!result?.items.some((j) =>
-        ["pending", "running", "retry"].includes(j.state),
-      ),
+    (result) => poll && !!result?.items.some(jobIsRunning),
   );
   const [selected, setSelected] = useState<Job | null>(null);
   const items = data.data?.items;
   const detail = items?.find((j) => j.id === selected?.id) || selected;
-  const running = items?.some((j) =>
-    ["pending", "running", "retry"].includes(j.state),
-  );
+  const running = items?.some(jobIsRunning);
   return (
     <>
       <div className="tab-head">
         <div>
           <h2>任務中心</h2>
           <p className="muted">
-            追蹤會話提取的真實處理狀態。任務完成後，記憶仍需人工審核。
+            查看已提交會話的提取、存儲與索引結果。存儲方式依各 Agent 的設定。
           </p>
         </div>
         <Space>
@@ -703,12 +752,18 @@ export function Jobs() {
               ),
             },
             {
-              title: "狀態",
+              title: "提取狀態",
               dataIndex: "state",
               render: (v) => <Status value={v} />,
             },
             { title: "嘗試次數", dataIndex: "attempt" },
             { title: "更新時間", dataIndex: "updated_at", render: when },
+            { title: "存儲結果", render: (_, job) => jobSummary(job) },
+            {
+              title: "Agent",
+              dataIndex: "agent_id",
+              render: (id) => <ID value={id} />,
+            },
             { title: "原因", dataIndex: "error_code", render: (v) => v || "—" },
           ]}
         />
@@ -725,10 +780,62 @@ export function Jobs() {
       >
         {detail && (
           <>
-            <Status value={detail.state} />
+            <p>
+              提取狀態：
+              <Status value={detail.state} />
+            </p>
             <p>任務 ID：{detail.id}</p>
             <p>會話 ID：{detail.session_id}</p>
             <p>服務對象：{detail.subject_id}</p>
+            <p>Agent：{detail.agent_id}</p>
+            <p>來源範圍：會話第 1–{detail.through_sequence} 則訊息</p>
+            <p>存儲結果：{jobSummary(detail)}</p>
+            <p>
+              處理方式：
+              {detail.result?.policy === "automatic"
+                ? "自動存儲"
+                : detail.result?.policy === "manual"
+                  ? "人工審核"
+                  : "未記錄／尚未處理"}
+            </p>
+            {detail.result && (
+              <>
+                <p>
+                  {Object.entries(detail.result.counts)
+                    .map(
+                      ([key, count]) => `${resultLabels[key] || key} ${count}`,
+                    )
+                    .join(" · ")}
+                </p>
+                {detail.result.items.map((item) => (
+                  <div key={item.candidate_id} style={{ marginBottom: 24 }}>
+                    <Tag>{resultLabels[item.outcome] || item.outcome}</Tag>
+                    <p
+                      style={{
+                        whiteSpace: "pre-wrap",
+                        overflowWrap: "anywhere",
+                      }}
+                    >
+                      {item.content || "正文已清除或未保留"}
+                    </p>
+                    <p>原因：{item.reason}</p>
+                    <p>
+                      記憶：{item.memory_id || "尚未入庫"}
+                      {item.memory_version ? ` · v${item.memory_version}` : ""}
+                    </p>
+                    <p>來源訊息：{item.source_message_ids.join(", ")}</p>
+                    {item.publication && (
+                      <p>
+                        索引發布：{item.publication.state}
+                        {item.publication.error_code
+                          ? ` · ${item.publication.error_code}`
+                          : ""}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </>
+            )}
             <p>追蹤編號：{detail.request_id}</p>
             <p>
               輸入／輸出 tokens：{detail.input_tokens ?? "未回報"}／

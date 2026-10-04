@@ -12,6 +12,7 @@ export interface Entity {
   id: string;
   name: string;
   active: boolean;
+  memory_policy?: "manual" | "automatic";
 }
 export interface Space extends Entity {
   description: string;
@@ -82,10 +83,12 @@ export interface Issued {
     expiresAt: number;
     mcpServer: Record<string, unknown>;
     env: string;
+    harnesses?: { id: string; name: string; path: string; config: string; note: string }[];
   };
 }
 export interface Job {
   id: string;
+  agent_id: string;
   session_id: string;
   subject_id: string;
   state: string;
@@ -95,6 +98,24 @@ export interface Job {
   request_id: string;
   input_tokens: number | null;
   output_tokens: number | null;
+  through_sequence: number;
+  result?: {
+    policy: "manual" | "automatic" | null;
+    pipeline_state: string;
+    reason: string | null;
+    counts: Record<string, number>;
+    items: {
+      candidate_id: string;
+      outcome: string;
+      reason: string;
+      content: string | null;
+      source_message_ids: string[];
+      memory_id: string | null;
+      memory_version: number | null;
+      memory_status: string | null;
+      publication: { state: string; error_code: string | null } | null;
+    }[];
+  };
 }
 export interface Candidate {
   id: string;
